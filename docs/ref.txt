@@ -1,0 +1,3 @@
+https://github.com/phineas-pta/fine-tune-whisper-vi
+https://github.com/phineas-pta/fine-tune-whisper-vi/blob/main/eval/evaluate-whisper.ipynb
+https://huggingface.co/spaces/openai/whisper/discussions/6
