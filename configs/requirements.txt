@@ -1,0 +1,14 @@
+torch
+torchvision
+torchaudio
+accelerate
+datasets 
+librosa 
+transformers 
+evaluate 
+soundfile 
+jiwer
+mlflow
+dotenv
+peft
+bitsandbytes
