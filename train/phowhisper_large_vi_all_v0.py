@@ -16,6 +16,8 @@ import peft
 import accelerate
 
 log_dir = os.getcwd() + "/logs"
+if not os.path.exists(log_dir):
+    os.makedirs(log_dir)
 
 logging.basicConfig(
     filename=os.path.join(log_dir, "phowhisper_large_vi_v0.log"),
@@ -30,6 +32,8 @@ login(token=os.getenv("HF_TOKEN"))
 mlflow.set_experiment("PhoWhisper_ViMD_FPTU")
 
 cache_dir = os.getcwd() + "/cache"
+if not os.path.exists(cache_dir):
+    os.makedirs(cache_dir)
 os.environ["HF_DATASETS_CACHE"] = cache_dir
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 torch.cuda.empty_cache()
