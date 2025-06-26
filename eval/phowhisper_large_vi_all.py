@@ -174,7 +174,7 @@ def evaluate(dataset):
                     wer = jiwer.wer(
                         ref_text,
                         hyp_text,
-                        truth_transform=JIWER_TRANS,
+                        reference_transform=JIWER_TRANS,
                         hypothesis_transform=JIWER_TRANS,
                     )
                     results.append(
