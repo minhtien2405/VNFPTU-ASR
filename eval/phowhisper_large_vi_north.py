@@ -18,7 +18,7 @@ import numpy as np
 log_dir = os.path.join(os.getcwd(), "logs")
 os.makedirs(log_dir, exist_ok=True)
 logging.basicConfig(
-    filename=os.path.join(log_dir, "eval_phowhisper_large_vi_all.log"),
+    filename=os.path.join(log_dir, "eval_phowhisper_large_vi_north.log"),
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
@@ -50,7 +50,7 @@ JIWER_TRANS = jiwer.Compose(
 )
 
 
-def load_dataset(region="All"):
+def load_dataset(region="North"):
     """
     Load and preprocess the ViMD dataset for evaluation.
 
@@ -86,7 +86,7 @@ def load_dataset(region="All"):
     return dataset
 
 
-PEFT_MODEL_ID = "minhtien2405/phowhisper-large-all-vi"
+PEFT_MODEL_ID = "minhtien2405/phowhisper-large-north-vi"
 try:
     BASE_MODEL_ID = PeftConfig.from_pretrained(
         PEFT_MODEL_ID, cache_dir=cache_dir
@@ -130,7 +130,7 @@ PIPE = AutomaticSpeechRecognitionPipeline(
     model=MODEL,
     tokenizer=TOKENIZER,
     feature_extractor=FEATURE_EXTRACTOR,
-    return_timestamps=True,  # temp
+    return_timestamps=True,
 )
 # PIPE_KWARGS = {"language": "vi", "task": "transcribe"}
 BATCH_SIZE = 16
@@ -273,7 +273,7 @@ def save_results(results, output_file="eval_results.txt"):
 
 if __name__ == "__main__":
     try:
-        dataset = load_dataset(region="All")
+        dataset = load_dataset(region="North")
 
     except Exception as e:
         logging.error(f"Failed to load dataset: {str(e)}")
@@ -281,7 +281,9 @@ if __name__ == "__main__":
 
     results = evaluate(dataset)
 
-    save_results(results, output_file="eval_results_all.txt")
+    save_results(
+        results, output_file=f"eval_results_{PEFT_MODEL_ID.split('/')[-1]}_north.txt"
+    )
 
     logging.info("Evaluation script completed successfully.")
     print("Evaluation completed. Check logs and results in the logs directory.")

@@ -217,7 +217,7 @@ class MLflowCallback(TrainerCallback):
 
 
 training_args = Seq2SeqTrainingArguments(
-    output_dir="./logs/phowhisper-large-all-vi",
+    output_dir="./logs/phowhisper-large-north-vi",
     per_device_train_batch_size=4,
     gradient_accumulation_steps=8,
     learning_rate=1e-5,
@@ -237,10 +237,10 @@ training_args = Seq2SeqTrainingArguments(
     greater_is_better=False,
     push_to_hub=True,
     remove_unused_columns=False,
-    hub_model_id="minhtien2405/phowhisper-large-all-vi",
+    hub_model_id="minhtien2405/phowhisper-large-north-vi",
 )
 
-with mlflow.start_run(run_name="phowhisper_finetune_all_vi"):
+with mlflow.start_run(run_name="phowhisper_finetune_north_vi"):
     mlflow.log_params(
         {
             "model_name": model_id,
@@ -273,11 +273,11 @@ with mlflow.start_run(run_name="phowhisper_finetune_all_vi"):
             f"Final evaluation WER in validation set: {eval_results['eval_wer']}"
         )
 
-        with open("./logs/phowhisper-large-all-vi/eval_results.json", "w") as f:
+        with open("./logs/phowhisper-large-north-vi/eval_results.json", "w") as f:
             json.dump(eval_results, f, indent=4)
         logging.info("Evaluation results saved to eval_results.json.")
         mlflow.log_artifact(
-            "./logs/phowhisper-large-all-vi/eval_results.json",
+            "./logs/phowhisper-large-north-vi/eval_results.json",
             artifact_path="eval_results",
         )
 
@@ -289,18 +289,18 @@ with mlflow.start_run(run_name="phowhisper_finetune_all_vi"):
     except Exception as e:
         logging.error(f"An error occurred during evaluation: {e}")
 
-    model_dir = "./models/phowhisper-large-all-vi"
+    model_dir = "./models/phowhisper-large-north-vi"
     trainer.save_model(model_dir)
     processor.save_pretrained(model_dir)
     logging.info("Model and processor saved locally.")
 
     trainer.push_to_hub(
-        commit_message="Fine-tuned PhoWhisper large on ViMD All region",
-        tags=["speech-recognition", "vietnamese", "all-vietnam"],
+        commit_message="Fine-tuned PhoWhisper large on ViMD North region",
+        tags=["speech-recognition", "vietnamese", "north-vietnam"],
         dataset="nguyendv02/ViMD_Dataset",
         language="vi",
         finetuned_from=model_id,
         tasks="automatic-speech-recognition",
     )
-    processor.push_to_hub("minhtien2405/phowhisper-large-all-vi")
+    processor.push_to_hub("minhtien2405/phowhisper-large-north-vi")
     logging.info("Model pushed to Hugging Face Hub.")
