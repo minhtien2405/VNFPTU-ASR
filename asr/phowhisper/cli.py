@@ -14,7 +14,7 @@ from processor.data_processor import DataProcessor
 from train.trainer import Trainer
 from eval.evaluator import Evaluator
 from infer.inference import Inference
-from processor.parallel_worker import chunk_worker
+from processor.parallel_chunker import chunk_worker
 from transformers import WhisperProcessor
 from torch.utils.data import Dataset
 
