@@ -1,6 +1,6 @@
 # Dữ liệu lớn và model checkpoints
 /data/
-/models/
+/models/*
 *.pth
 *.pt
 *.bin
@@ -26,10 +26,10 @@ logs/phowhisper-large-south-vi/
 logs/*
 
 # MLflow
-mlruns/
+mlruns/*
 
 # Models
-models/
+models/*
 *.pt
 *.pth
 *.ckpt
