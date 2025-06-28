@@ -4,9 +4,9 @@ import os
 import sys
 import torch
 import wandb
+import torch.multiprocessing as mp
+
 from huggingface_hub import login
-
-
 from dotenv import load_dotenv
 from pathlib import Path  
 from configs.config import Config
@@ -14,12 +14,12 @@ from processor.data_processor import DataProcessor
 from train.trainer import Trainer
 from eval.evaluator import Evaluator
 from infer.inference import Inference
+from processor.parallel_worker import chunk_worker
 from transformers import WhisperProcessor
 
 load_dotenv(os.path.join(os.path.dirname(__file__),  "configs", ".env"))
 
 def validate_file(file_path, description):
-    """Validate if a file exists."""
     if not Path(file_path).is_file():
         logging.error(f"{description} not found: {file_path}")
         sys.exit(f"Error: {description} not found: {file_path}")
@@ -28,7 +28,7 @@ def setup_environment():
     token = os.getenv("HF_TOKEN")
     if token:
         login(token)
-        
+
     wandb_token = os.getenv("WANDB_API_KEY")
     if wandb_token:
         try:
@@ -38,7 +38,7 @@ def setup_environment():
             sys.exit("Error: WandB login failed. Check your WANDB_API_KEY in .env file.")
         finally:
             logging.info("WandB login successful")
-    
+
     cache_dir = os.path.join(os.getcwd(), "cache")
     os.makedirs(cache_dir, exist_ok=True)
 
@@ -57,10 +57,7 @@ def cli():
 @click.option('--config', default='phowhisper/configs/config.yaml', help='Path to config file')
 @click.option('--region', default='All', type=click.Choice(['All', 'Central', 'South', 'North']), help='Region to fine-tune on')
 def train(config, region):
-    
     setup_environment()
-    
-    """Fine-tune PhoWhisper model"""
     validate_file(config, "Config file")
     setup_logging(config, region)
     config_obj = Config(config, region)
@@ -75,8 +72,34 @@ def train(config, region):
 
     processor = WhisperProcessor.from_pretrained(config_obj.model.model_id, language=config_obj.model.language, task=config_obj.model.task)
     data_processor = DataProcessor(config_obj, processor, device="cuda" if torch.cuda.is_available() else "cpu")
+
     train_dataset, valid_dataset = data_processor.load_dataset()
-    train_dataset = data_processor.process(train_dataset)
+
+    # Use torch.multiprocessing for training data
+    mp.set_start_method("spawn", force=True)
+    ctx = mp.get_context("spawn")
+    queue = ctx.Queue()
+
+    num_workers = 2
+    processes = []
+
+    for i in range(num_workers):
+        shard = train_dataset.shard(num_shards=num_workers, index=i)
+        p = ctx.Process(
+            target=chunk_worker,
+            args=(shard, config_obj.model.model_id, config_obj.model.language, config_obj.model.device, processor, queue, i),
+        )
+        p.start()
+        processes.append(p)
+
+    results = []
+    for _ in range(num_workers):
+        results.extend(queue.get())
+
+    for p in processes:
+        p.join()
+
+    train_dataset = torch.utils.data.Dataset.from_list(results)
     valid_dataset = data_processor.process(valid_dataset)
 
     trainer = Trainer(config_obj, processor, train_dataset, valid_dataset)
@@ -86,7 +109,6 @@ def train(config, region):
 @click.option('--config', default='phowhisper/configs/config.yaml', help='Path to config file')
 @click.option('--model-path', required=True, help='Path to trained model or HF model ID')
 def evaluate(config, model_path):
-    """Evaluate PhoWhisper model"""
     validate_file(config, "Config file")
     validate_file(model_path, "Model file")
     region = model_path.split('-')[-2].capitalize() if '-' in model_path else 'All'
@@ -105,7 +127,6 @@ def evaluate(config, model_path):
 @click.option('--audio-path', required=True, help='Path to audio file')
 @click.option('--region', default='All', type=click.Choice(['All', 'Central', 'South', 'North']), help='Region for model')
 def infer(config, model_path, audio_path, region):
-    """Run inference on audio file"""
     validate_file(config, "Config file")
     validate_file(audio_path, "Audio file")
     setup_logging(config, region)
