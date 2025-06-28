@@ -21,8 +21,8 @@ class DataProcessor:
             device=device,
             language=config.model.language,
         )
-        logger.info(f"[DataProcessor] Initialized on region '{self.region}'")
-
+        logger.info(f"[DataProcessor] Initialized on region '{self.region}'. Chunker is ready for lazy loading.")
+        
     def load_dataset(self) -> (Dataset, Dataset):
         logger.info(f"[DataProcessor] Loading dataset: {self.config.dataset.name}")
         dataset = load_dataset(self.config.dataset.name, cache_dir=self.config.dataset.cache_dir)
@@ -43,7 +43,7 @@ class DataProcessor:
 
     def _filter_by_region(self, dataset: Dataset, split: str) -> Dataset:
         return dataset.filter(lambda x: x["region"].lower() == self.region)
-
+    
     def prepare_dataset(self, batch: Dict) -> Dict:
         audio = batch["audio"]
         audio_array = audio["array"]
