@@ -3,13 +3,13 @@ import os, json
 from datasets import Dataset
 from .whisperx_chunker import WhisperXChunker
 
-def chunk_worker(dataset, config_dict, device, worker_id, queue):
+def chunk_worker(dataset, language, device, processor, worker_id, queue):
     import torch
     import whisperx
     chunker = WhisperXChunker(
         model_path="./converted_phowhisper",
         device=device,
-        language=config_dict["language"]
+        language=language
     )
 
     output = []
@@ -17,7 +17,7 @@ def chunk_worker(dataset, config_dict, device, worker_id, queue):
         try:
             chunks = chunker.chunk(example["audio"]["array"], example["audio"]["sampling_rate"])
             input_features = [
-                config_dict["processor"](
+                processor(
                     chunk["array"],
                     sampling_rate=chunk["sampling_rate"],
                     return_tensors="pt"
@@ -26,7 +26,7 @@ def chunk_worker(dataset, config_dict, device, worker_id, queue):
             ]
             output.append({
                 "input_features": input_features,
-                "labels": config_dict["processor"].tokenizer(example["text"]).input_ids
+                "labels": processor.tokenizer(example["text"]).input_ids
             })
         except Exception as e:
             print(f"[Worker {worker_id}] Error on sample {i}: {e}")
