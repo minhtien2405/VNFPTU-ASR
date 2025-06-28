@@ -23,6 +23,7 @@ venv/
 # Logs
 logs/phowhisper-large-north-vi/
 logs/phowhisper-large-south-vi/
+logs/*
 
 # MLflow
 mlruns/
