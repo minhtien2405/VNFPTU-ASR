@@ -181,7 +181,12 @@ class Trainer:
         )
 
     def train(self):
-        self.trainer.train(resume_from_checkpoint=True if os.path.exists(self.config.training.output_dir) else None)
+        checkpoint_path = os.path.join(self.config.training.output_dir, "checkpoint-last")
+        resume = checkpoint_path if os.path.exists(checkpoint_path) else None
+        if resume:
+            logger.info(f"Resuming training from checkpoint: {checkpoint_path}")
+        self.trainer.train(resume_from_checkpoint=resume)
+        # self.trainer.train(resume_from_checkpoint=True if os.path.exists(self.config.training.output_dir) else None)
         logger.info("Training completed")
 
         try:
@@ -194,7 +199,9 @@ class Trainer:
             eval_path = os.path.join(self.config.training.eval_output_dir, "eval_results.json")
             with open(eval_path, "w") as f:
                 json.dump(eval_results, f, indent=4)
-            wandb.save(eval_path)
+            artifact = wandb.Artifact("eval_results", type="evaluation")
+            artifact.add_file(eval_path)
+            wandb.log_artifact(artifact)
             logger.info("Evaluation results saved")
         except Exception as e:
             logger.error(f"Evaluation failed: {str(e)}")
