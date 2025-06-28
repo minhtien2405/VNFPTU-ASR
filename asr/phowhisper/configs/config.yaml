@@ -1,0 +1,64 @@
+model:
+  model_id: "vinai/PhoWhisper-large"
+  language: "vi"
+  task: "transcribe"
+  quantization:
+    load_in_4bit: true
+    bnb_4bit_compute_dtype: "float16"
+    bnb_4bit_use_double_quant: true
+    bnb_4bit_quant_type: "nf4"
+
+lora:
+  r: 32
+  lora_alpha: 64
+  target_modules: ["q_proj", "v_proj"]
+  lora_dropout: 0.05
+  bias: "none"
+
+dataset:
+  name: "nguyendv02/ViMD_Dataset"
+  cache_dir: "./cache"
+  sampling_rate: 16000
+  regions: ["All", "Central", "South", "North"]
+
+training:
+  output_dir: "./logs/phowhisper-large-{region}-vi"
+  per_device_train_batch_size: 4
+  gradient_accumulation_steps: 8
+  learning_rate: 1e-5
+  warmup_steps: 100
+  save_steps: 100
+  save_total_limit: 3
+  logging_steps: 50
+  fp16: true
+  optim: "adamw_bnb_8bit"
+  eval_strategy: "steps"
+  eval_steps: 100
+  per_device_eval_batch_size: 4
+  metric_for_best_model: "wer"
+  greater_is_better: false
+  load_best_model_at_end: true
+  save_strategy: "steps"
+  hub_model_id: "minhtien2405/phowhisper-large-{region}-vi"
+
+eval:
+  compute_metrics: true
+  eval_on_train: false
+  eval_on_test: true
+  eval_on_dev: true
+  eval_on_all: false
+  eval_on_all_regions: true
+  regions: ["All", "Central", "South", "North"]
+  region: "{region}"
+  test_split: "test"
+  dev_split: "dev"
+  train_split: "train"
+  all_split: "all"
+
+wandb:
+  project: "PhoWhisper_ViMD"
+  run_name: "phowhisper_finetune_{region}"
+
+logging:
+  log_dir: "./logs"
+  log_file: "phowhisper_large_vi_{region}_v0.log"

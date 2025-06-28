@@ -12,3 +12,9 @@ mlflow
 dotenv
 peft
 bitsandbytes
+pyyaml
+click
+whisperx @ git+https://github.com/m-bain/whisperX.git
+numpy
+wandb
+thop
