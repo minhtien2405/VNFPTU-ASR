@@ -47,4 +47,6 @@ class Config:
         return value
 
     def __getattr__(self, name: str):
-        return getattr(self.config, name)
+        if hasattr(self.config, name):
+            return getattr(self.config, name)
+        raise AttributeError(f"'Config' object has no attribute '{name}'")
