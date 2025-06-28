@@ -5,7 +5,7 @@ from datasets import load_dataset, Audio, Dataset
 from transformers import WhisperProcessor
 import wandb
 
-from phowhisper.processor.whisperx_chunker import WhisperXChunker
+from processor.whisperx_chunker import WhisperXChunker
 
 logger = logging.getLogger(__name__)
 
