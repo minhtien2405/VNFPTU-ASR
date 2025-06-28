@@ -23,8 +23,6 @@ class DataProcessor:
             language=config.model.language,
             compute_type="float16"
         )
-        self.vad_model = whisperx.load_vad_model(device)
-
         logger.info(f"[DataProcessor] Initialized with model '{config.model.model_id}' on region '{self.region}'")
 
     def load_dataset(self) -> (Dataset, Dataset):
