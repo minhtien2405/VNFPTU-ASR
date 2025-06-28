@@ -17,6 +17,15 @@ A professional setup for fine-tuning, evaluating, and running inference with the
    wandb login
    ```
 
+3. convert phowhisper model to transformers format:
+   ```bash
+   ct2-transformers-converter \
+  --model vinai/PhoWhisper-large \
+  --output_dir ./converted_phowhisper \
+  --copy_files tokenizer.json tokenizer_config.json special_tokens_map.json \
+  --quantization float16
+   ```
+
 ## Usage
 
 ### Training
