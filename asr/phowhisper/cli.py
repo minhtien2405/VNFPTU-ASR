@@ -16,8 +16,19 @@ from eval.evaluator import Evaluator
 from infer.inference import Inference
 from processor.parallel_worker import chunk_worker
 from transformers import WhisperProcessor
+from torch.utils.data import Dataset
 
 load_dotenv(os.path.join(os.path.dirname(__file__),  "configs", ".env"))
+
+class ListDataset(Dataset):
+    def __init__(self, data_list):
+        self.data_list = data_list
+
+    def __len__(self):
+        return len(self.data_list)
+
+    def __getitem__(self, idx):
+        return self.data_list[idx]
 
 def validate_file(file_path, description):
     if not Path(file_path).is_file():
@@ -99,7 +110,7 @@ def train(config, region):
     for p in processes:
         p.join()
 
-    train_dataset = torch.utils.data.Dataset.from_list(results)
+    train_dataset = ListDataset(results)
     valid_dataset = data_processor.process(valid_dataset)
 
     trainer = Trainer(config_obj, processor, train_dataset, valid_dataset)
