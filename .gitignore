@@ -21,8 +21,8 @@ venv/
 *.swp
 
 # Logs
-logs/
-*.log
+logs/phowhisper-large-north-vi/
+logs/phowhisper-large-south-vi/
 
 # MLflow
 mlruns/

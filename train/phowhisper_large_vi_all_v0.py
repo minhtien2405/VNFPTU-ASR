@@ -26,7 +26,7 @@ if not os.path.exists(log_dir):
     os.makedirs(log_dir)
 
 logging.basicConfig(
-    filename=os.path.join(log_dir, "phowhisper_large_vi_v0.log"),
+    filename=os.path.join(log_dir, "phowhisper_large_vi_all_v0.log"),
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",

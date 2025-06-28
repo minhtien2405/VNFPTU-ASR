@@ -26,7 +26,7 @@ if not os.path.exists(log_dir):
     os.makedirs(log_dir)
 
 logging.basicConfig(
-    filename=os.path.join(log_dir, "phowhisper_large_vi_central_v0.log"),
+    filename=os.path.join(log_dir, "phowhisper_large_vi_south_v0.log"),
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
@@ -35,7 +35,7 @@ logging.basicConfig(
 load_dotenv("./configs/.env")
 login(token=os.getenv("HF_TOKEN"))
 
-mlflow.set_experiment("PhoWhisper_Central_ViMD_FPTU")
+mlflow.set_experiment("PhoWhisper_ViMD_FPTU")
 
 cache_dir = os.getcwd() + "/cache"
 if not os.path.exists(cache_dir):
@@ -45,11 +45,9 @@ os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 torch.cuda.empty_cache()
 
 dataset = load_dataset("nguyendv02/ViMD_Dataset", cache_dir=cache_dir)
-train_dataset = dataset["train"].filter(lambda x: x["region"] == "Central")
-valid_dataset = dataset["valid"].filter(lambda x: x["region"] == "Central")
 
-train_dataset = train_dataset.cast_column("audio", Audio(sampling_rate=16000))
-valid_dataset = valid_dataset.cast_column("audio", Audio(sampling_rate=16000))
+train_dataset = dataset["train"].cast_column("audio", Audio(sampling_rate=16000))
+valid_dataset = dataset["valid"].cast_column("audio", Audio(sampling_rate=16000))
 
 num_of_long_audio = 0
 
@@ -204,7 +202,6 @@ def compute_metrics(pred):
     label_ids = pred.label_ids
 
     label_ids[label_ids == -100] = processor.tokenizer.pad_token_id
-
     pred_str = processor.tokenizer.batch_decode(pred_ids, skip_special_tokens=True)
     label_str = processor.tokenizer.batch_decode(label_ids, skip_special_tokens=True)
 
@@ -220,7 +217,7 @@ class MLflowCallback(TrainerCallback):
 
 
 training_args = Seq2SeqTrainingArguments(
-    output_dir="./logs/phowhisper-large-central-vi",
+    output_dir="./logs/phowhisper-large-south-vi",
     per_device_train_batch_size=4,
     gradient_accumulation_steps=8,
     learning_rate=1e-5,
@@ -240,10 +237,10 @@ training_args = Seq2SeqTrainingArguments(
     greater_is_better=False,
     push_to_hub=True,
     remove_unused_columns=False,
-    hub_model_id="minhtien2405/phowhisper-large-central-vi",
+    hub_model_id="minhtien2405/phowhisper-large-south-vi",
 )
 
-with mlflow.start_run(run_name="phowhisper_finetune_central_vi"):
+with mlflow.start_run(run_name="phowhisper_finetune_south_vi"):
     mlflow.log_params(
         {
             "model_name": model_id,
@@ -276,11 +273,11 @@ with mlflow.start_run(run_name="phowhisper_finetune_central_vi"):
             f"Final evaluation WER in validation set: {eval_results['eval_wer']}"
         )
 
-        with open("./logs/phowhisper-large-central-vi/eval_results.json", "w") as f:
+        with open("./logs/phowhisper-large-south-vi/eval_results.json", "w") as f:
             json.dump(eval_results, f, indent=4)
         logging.info("Evaluation results saved to eval_results.json.")
         mlflow.log_artifact(
-            "./logs/phowhisper-large-central-vi/eval_results.json",
+            "./logs/phowhisper-large-south-vi/eval_results.json",
             artifact_path="eval_results",
         )
 
@@ -292,21 +289,18 @@ with mlflow.start_run(run_name="phowhisper_finetune_central_vi"):
     except Exception as e:
         logging.error(f"An error occurred during evaluation: {e}")
 
-    model_dir = "./models/phowhisper-large-central-vi"
+    model_dir = "./models/phowhisper-large-south-vi"
     trainer.save_model(model_dir)
     processor.save_pretrained(model_dir)
     logging.info("Model and processor saved locally.")
 
-    # mlflow.pytorch.log_model(model, "model")
-    # mlflow.log_artifact("./phowhisper-large-central-vi", artifact_path="processor")
-
     trainer.push_to_hub(
-        commit_message="Fine-tuned PhoWhisper large on ViMD Central region",
-        tags=["speech-recognition", "vietnamese", "central-vietnam"],
+        commit_message="Fine-tuned PhoWhisper large on ViMD south region",
+        tags=["speech-recognition", "vietnamese", "south-vietnam"],
         dataset="nguyendv02/ViMD_Dataset",
         language="vi",
         finetuned_from=model_id,
         tasks="automatic-speech-recognition",
     )
-    processor.push_to_hub("minhtien2405/phowhisper-large-central-vi")
+    processor.push_to_hub("minhtien2405/phowhisper-large-south-vi")
     logging.info("Model pushed to Hugging Face Hub.")
