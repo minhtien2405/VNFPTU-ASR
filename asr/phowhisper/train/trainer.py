@@ -11,6 +11,7 @@ from transformers import (
     Seq2SeqTrainingArguments,
     BitsAndBytesConfig,
     EarlyStoppingCallback,
+    TrainerCallback
 )
 import evaluate
 import wandb
@@ -43,9 +44,9 @@ class DataCollatorSpeechSeq2SeqWithPadding:
         batch["labels"] = labels
         return batch
     
-class WandbCallback(Seq2SeqTrainer.Callback):
-    def on_evaluate(self, args, state, control, metrics, **kwargs):
-        if "eval_wer" in metrics:
+class WandbCallback(TrainerCallback):
+    def on_evaluate(self, args, state, control, metrics=None, **kwargs):
+        if metrics and "eval_wer" in metrics:
             wandb.log({"eval_wer": metrics["eval_wer"], "step": state.global_step})
             logger.info(f"Logged eval_wer: {metrics['eval_wer']}")
 
@@ -151,7 +152,6 @@ class Trainer:
             push_to_hub=True,
             remove_unused_columns=False,
             hub_model_id=self.config.training.hub_model_id,
-            resume_from_checkpoint=True if os.path.exists(os.path.join(self.config.training.output_dir, "checkpoint")) else None,
         )
 
         data_collator = DataCollatorSpeechSeq2SeqWithPadding(
@@ -181,13 +181,17 @@ class Trainer:
         )
 
     def train(self):
-        self.trainer.train()
+        self.trainer.train(resume_from_checkpoint=True if os.path.exists(self.config.training.output_dir) else None)
         logger.info("Training completed")
 
         try:
+            torch.cuda.empty_cache()
+            torch.cuda.ipc_collect()
+            logger.info("Starting evaluation...")
+            
             eval_results = self.trainer.evaluate()
             logger.info(f"Final evaluation WER: {eval_results['eval_wer']}")
-            eval_path = os.path.join(self.config.training.output_dir, "eval_results.json")
+            eval_path = os.path.join(self.config.training.eval_output_dir, "eval_results.json")
             with open(eval_path, "w") as f:
                 json.dump(eval_results, f, indent=4)
             wandb.save(eval_path)

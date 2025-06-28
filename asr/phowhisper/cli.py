@@ -92,6 +92,7 @@ def infer(config, model_path, audio_path, region):
 def setup_logging(config_path, region):
     validate_file(config_path, "Config file")
     config = Config(config_path, region)
+    os.makedirs(config.logging.eval_output_dir, exist_ok=True)
     os.makedirs(config.logging.log_dir, exist_ok=True)
     logging.basicConfig(
         filename=os.path.join(config.logging.log_dir, config.logging.log_file),
