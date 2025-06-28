@@ -5,4 +5,4 @@ MODEL_PATH=${2:-"./models/phowhisper-large-all-vi"}
 CONFIG_PATH="phowhisper/configs/config.yaml"
 
 echo "Running inference on audio: $AUDIO_PATH"
-python cli.py infer --config $CONFIG_PATH --model-path $MODEL_PATH --audio-path $AUDIO_PATH
+python ASR/Phowhisper/cli.py infer --config $CONFIG_PATH --model-path $MODEL_PATH --audio-path $AUDIO_PATH
