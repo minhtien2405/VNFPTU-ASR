@@ -66,6 +66,6 @@ class DataProcessor:
         return dataset.map(
             self.prepare_dataset,
             remove_columns=dataset.column_names,
-            num_proc=4,
+            num_proc=2,
             desc="Preprocessing dataset"
         )
