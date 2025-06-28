@@ -7,7 +7,7 @@ def chunk_worker(dataset, config_dict, device, worker_id, queue):
     import torch
     import whisperx
     chunker = WhisperXChunker(
-        model_path=config_dict["model_path"],
+        model_path="./converted_phowhisper",
         device=device,
         language=config_dict["language"]
     )

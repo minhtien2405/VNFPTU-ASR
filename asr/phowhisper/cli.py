@@ -98,7 +98,7 @@ def train(config, region):
         shard = train_dataset.shard(num_shards=num_workers, index=i)
         p = ctx.Process(
             target=chunk_worker,
-            args=(shard, config_obj.model.model_id, config_obj.model.language, config_obj.model.device, processor, queue, i),
+            args=(shard, config_obj.model.language, config_obj.model.device, processor, queue, i),
         )
         p.start()
         processes.append(p)
