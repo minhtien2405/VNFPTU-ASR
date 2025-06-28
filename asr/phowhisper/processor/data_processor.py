@@ -79,36 +79,36 @@ class DataProcessor:
         return dataset.filter(lambda x: x["region"].lower() == self.region)
     
     def process(self, dataset: Dataset) -> Dataset:
-    import multiprocessing as mp
-    from processor.parallel_chunker import chunk_worker
+        import multiprocessing as mp
+        from processor.parallel_chunker import chunk_worker
 
-    num_workers = 2
-    mp.set_start_method("spawn", force=True)
-    queue = mp.Queue()
+        num_workers = 2
+        mp.set_start_method("spawn", force=True)
+        queue = mp.Queue()
 
-    # Tách dataset đều cho từng worker
-    chunks = [dataset.shard(num_workers, i) for i in range(num_workers)]
+        # Tách dataset đều cho từng worker
+        chunks = [dataset.shard(num_workers, i) for i in range(num_workers)]
 
-    config_dict = {
-        "model_path": "./converted_phowhisper",
-        "language": self.config.model.language,
-        "processor": self.processor
-    }
+        config_dict = {
+            "model_path": "./converted_phowhisper",
+            "language": self.config.model.language,
+            "processor": self.processor
+        }
 
-    processes = []
-    for i in range(num_workers):
-        p = mp.Process(target=chunk_worker, args=(chunks[i], config_dict, self.device, i, queue))
-        p.start()
-        processes.append(p)
+        processes = []
+        for i in range(num_workers):
+            p = mp.Process(target=chunk_worker, args=(chunks[i], config_dict, self.device, i, queue))
+            p.start()
+            processes.append(p)
 
-    results = []
-    for _ in processes:
-        results.extend(queue.get())
+        results = []
+        for _ in processes:
+            results.extend(queue.get())
 
-    for p in processes:
-        p.join()
+        for p in processes:
+            p.join()
 
-    return Dataset.from_list(results)
+        return Dataset.from_list(results)
 
 
     # def process(self, dataset: Dataset) -> Dataset:
