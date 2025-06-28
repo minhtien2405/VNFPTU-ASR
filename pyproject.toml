@@ -38,4 +38,4 @@ dev = [
 ]
 
 [tool.setuptools]
-packages = ["train", "eval", "configs", "ASR"]
+packages = ["configs", "asr"]
