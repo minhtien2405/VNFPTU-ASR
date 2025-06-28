@@ -31,7 +31,7 @@ class WhisperXChunker:
 
     def chunk(self, audio_array: np.ndarray, sampling_rate: int) -> List[Dict[str, Union[np.ndarray, int]]]:
         result = self.model.transcribe(
-            {"array": audio_array, "sampling_rate": sampling_rate},
+            audio_array,
             batch_size=16,
             chunk_size=30,
         )
