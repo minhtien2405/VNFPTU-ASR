@@ -1,7 +1,7 @@
 import torch.multiprocessing as mp
 import os, json
 from datasets import Dataset
-from whisperx_chunker import WhisperXChunker
+from .whisperx_chunker import WhisperXChunker
 
 def chunk_worker(dataset, config_dict, device, worker_id, queue):
     import torch
