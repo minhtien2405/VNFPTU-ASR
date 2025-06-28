@@ -7,11 +7,11 @@ import wandb
 
 from dotenv import load_dotenv
 from pathlib import Path  
-from phowhisper.configs.config import Config
-from phowhisper.processor.data_processor import DataProcessor
-from phowhisper.train.trainer import Trainer
-from phowhisper.eval.evaluator import Evaluator
-from phowhisper.infer.inference import Inference
+from configs.config import Config
+from processor.data_processor import DataProcessor
+from train.trainer import Trainer
+from eval.evaluator import Evaluator
+from infer.inference import Inference
 from transformers import WhisperProcessor
 
 load_dotenv(os.path.join(os.path.dirname(__file__),  "configs", ".env"))
