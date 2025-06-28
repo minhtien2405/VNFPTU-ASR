@@ -4,6 +4,8 @@ import os
 import sys
 import torch
 import wandb
+from huggingface_hub import login
+
 
 from dotenv import load_dotenv
 from pathlib import Path  
@@ -22,6 +24,30 @@ def validate_file(file_path, description):
         logging.error(f"{description} not found: {file_path}")
         sys.exit(f"Error: {description} not found: {file_path}")
 
+def setup_environment():
+    token = os.getenv("HF_TOKEN")
+    if token:
+        login(token)
+        
+    wandb_token = os.getenv("WANDB_API_KEY")
+    if wandb_token:
+        try:
+            wandb.login(key=wandb_token)
+        except Exception as e:
+            logging.error(f"WandB login failed: {e}")
+            sys.exit("Error: WandB login failed. Check your WANDB_API_KEY in .env file.")
+        finally:
+            logging.info("WandB login successful")
+    
+    cache_dir = os.path.join(os.getcwd(), "cache")
+    os.makedirs(cache_dir, exist_ok=True)
+
+    os.environ["HF_DATASETS_CACHE"] = cache_dir
+    os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
 @click.group()
 def cli():
     """CLI for PhoWhisper speech-to-text model management"""
@@ -31,6 +57,9 @@ def cli():
 @click.option('--config', default='phowhisper/configs/config.yaml', help='Path to config file')
 @click.option('--region', default='All', type=click.Choice(['All', 'Central', 'South', 'North']), help='Region to fine-tune on')
 def train(config, region):
+    
+    setup_environment()
+    
     """Fine-tune PhoWhisper model"""
     validate_file(config, "Config file")
     setup_logging(config, region)
