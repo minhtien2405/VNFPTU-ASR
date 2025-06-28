@@ -30,11 +30,17 @@ class WhisperXChunker:
         return self._model
 
     def chunk(self, audio_array: np.ndarray, sampling_rate: int) -> List[Dict[str, Union[np.ndarray, int]]]:
+        if audio_array.dtype != np.float32:
+            audio_array = audio_array.astype(np.float32)
+
+        audio_array = audio_array / np.abs(audio_array).max()
+
         result = self.model.transcribe(
             audio_array,
             batch_size=16,
             chunk_size=30,
         )
+
         segments = result.get("segments", [])
         chunks = [
             {
@@ -43,5 +49,4 @@ class WhisperXChunker:
             }
             for segment in segments
         ]
-        logger.debug(f"[WhisperXChunker] Chunked audio into {len(chunks)} segments")
         return chunks
