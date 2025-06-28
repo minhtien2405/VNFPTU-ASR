@@ -18,7 +18,7 @@ class DataProcessor:
         self.region = config.region.lower()
 
         self.whisperx_model = whisperx.load_model(
-            model_path="./converted_phowhisper",
+            "./converted_phowhisper",
             device=device,
             language=config.model.language,
             compute_type="float16"
