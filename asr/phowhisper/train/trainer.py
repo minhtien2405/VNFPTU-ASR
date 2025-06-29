@@ -102,7 +102,7 @@ class Trainer:
             peft.prepare_model_for_kbit_training(
                 model,
                 use_gradient_checkpointing=True,
-                gradient_checkpointing_kwargs={"use_reentrant": False},
+                gradient_checkpointing_kwargs={"use_reentrant": True}, #False},
             ),
             peft.LoraConfig(
                 r=self.config.lora.r,
@@ -167,15 +167,15 @@ class Trainer:
             bf16=bool(self.config.training.bf16),
             optim=self.config.training.optim,
             eval_strategy=self.config.training.eval_strategy,
-            # eval_steps=int(self.config.training.eval_steps),
+            eval_steps=int(self.config.training.eval_steps),
             save_steps=int(self.config.training.save_steps),
             save_total_limit=int(self.config.training.save_total_limit),
-            # per_device_eval_batch_size=int(self.config.training.per_device_eval_batch_size),
+            per_device_eval_batch_size=int(self.config.training.per_device_eval_batch_size),
             logging_steps=int(self.config.training.logging_steps),
             metric_for_best_model=self.config.training.metric_for_best_model,
             greater_is_better=bool(self.config.training.greater_is_better),
-            # load_best_model_at_end=True,
-            # save_strategy="steps",
+            load_best_model_at_end=True,
+            save_strategy="steps",
             push_to_hub=True,
             remove_unused_columns=False,
             hub_model_id=hub_model_id,
@@ -215,11 +215,11 @@ class Trainer:
             data_collator=data_collator,
             compute_metrics=compute_metrics,
             callbacks=[
-                WandbCallback()
-                # EarlyStoppingCallback(
-                #     early_stopping_patience=4,
-                #     early_stopping_threshold=0.0
-                # )
+                WandbCallback(), 
+                EarlyStoppingCallback(
+                    early_stopping_patience=4,
+                    early_stopping_threshold=0.0
+                )
             ],
         )
         
