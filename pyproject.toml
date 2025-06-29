@@ -28,6 +28,15 @@ dependencies = [
     "numpy",
     "thop",
     "whisperx @ git+https://github.com/m-bain/whisperX.git",
+    "Pillow",
+    "pyyaml",
+    "sentencepiece",
+    "textgrid",
+    "pandas",
+    "jiwer",
+    "huggingface_hub",
+    "colorama",
+    "pydub",
 ]
 
 [project.optional-dependencies]
