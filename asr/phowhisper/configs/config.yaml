@@ -35,7 +35,7 @@ training:
   fp16: false
   bf16: true
   optim: "paged_adamw_8bit"
-  eval_strategy: "steps"
+  eval_strategy: "no"
   eval_steps: 100
   per_device_eval_batch_size: 1
   metric_for_best_model: "wer"
