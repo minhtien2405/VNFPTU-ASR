@@ -1,6 +1,7 @@
+import os
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 import click
 import logging
-import os
 import sys
 import torch
 import wandb

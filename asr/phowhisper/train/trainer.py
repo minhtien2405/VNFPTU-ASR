@@ -178,6 +178,7 @@ class Trainer:
             push_to_hub=True,
             remove_unused_columns=False,
             hub_model_id=hub_model_id,
+            dataloader_num_workers=0,
         )
 
         data_collator = DataCollatorSpeechSeq2SeqWithPadding(

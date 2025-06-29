@@ -83,7 +83,7 @@ class WhisperXChunker:
                 result = self.model.transcribe(
                     audio_array,
                     batch_size=16,
-                    chunk_size=30,
+                    chunk_size=30
                 )
             
             segments = result.get("segments", [])

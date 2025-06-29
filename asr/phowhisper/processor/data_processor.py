@@ -97,7 +97,6 @@ class DataProcessor:
                 cache_dir=self.config.dataset.cache_dir
             )
             
-            # Cast audio columns
             train_dataset = dataset["train"].cast_column(
                 "audio", 
                 Audio(sampling_rate=self.config.dataset.sampling_rate)
@@ -107,7 +106,6 @@ class DataProcessor:
                 Audio(sampling_rate=self.config.dataset.sampling_rate)
             )
 
-            # Filter by region if needed
             if self.region != "all":
                 train_dataset = self._filter_by_region(train_dataset)
                 valid_dataset = self._filter_by_region(valid_dataset)
