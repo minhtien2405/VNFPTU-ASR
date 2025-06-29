@@ -10,8 +10,8 @@ model:
   device: "cuda"
 
 lora:
-  r: 32
-  lora_alpha: 64
+  r: 16
+  lora_alpha: 32
   target_modules: ["q_proj", "v_proj"]
   lora_dropout: 0.05
   bias: "none"
@@ -26,7 +26,7 @@ training:
   output_dir: "./logs/phowhisper-medium-{region}-vi"
   eval_output_dir: "./outputs/phowhisper-medium-{region}-vi"
   per_device_train_batch_size: 1
-  gradient_accumulation_steps: 1
+  gradient_accumulation_steps: 2
   learning_rate: 1e-5
   warmup_steps: 50
   save_steps: 50
