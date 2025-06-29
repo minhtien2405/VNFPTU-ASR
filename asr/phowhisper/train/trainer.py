@@ -5,7 +5,7 @@ import logging
 import numpy as np
 from dataclasses import dataclass
 from typing import Any, Dict, List, Union
-from transformers: (
+from transformers import (
     WhisperForConditionalGeneration,
     Seq2SeqTrainer,
     Seq2SeqTrainingArguments,
