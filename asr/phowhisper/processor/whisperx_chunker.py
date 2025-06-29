@@ -51,6 +51,10 @@ class WhisperXChunker:
             if not isinstance(audio_array, np.ndarray):
                 raise ValueError("Input must be a numpy array")
             
+            # Convert to float32 to ensure compatibility
+            if audio_array.dtype != np.float32:
+                audio_array = audio_array.astype(np.float32)
+            
             # Handle NaN and Inf values
             if np.isnan(audio_array).any() or np.isinf(audio_array).any():
                 logger.warning("Found NaN or Inf values in audio array, replacing with zeros")
@@ -69,13 +73,18 @@ class WhisperXChunker:
     def chunk(self, audio_array: np.ndarray, sampling_rate: int) -> List[Dict[str, Union[np.ndarray, int]]]:
         """Chunk audio array into segments"""
         try:
+            # Enable TF32 for better compatibility with newer PyTorch versions
+            torch.backends.cuda.matmul.allow_tf32 = True
+            torch.backends.cudnn.allow_tf32 = True
+            
             audio_array = self._preprocess_audio(audio_array)
             
-            result = self.model.transcribe(
-                audio_array,
-                batch_size=16,
-                chunk_size=30,
-            )
+            with torch.cuda.amp.autocast(enabled=True):
+                result = self.model.transcribe(
+                    audio_array,
+                    batch_size=16,
+                    chunk_size=30,
+                )
             
             segments = result.get("segments", [])
             if not segments:
@@ -94,4 +103,5 @@ class WhisperXChunker:
             return chunks
 
         except Exception as e:
+            logger.error(f"Chunking error details: {str(e)}")
             raise WhisperXChunkerError(f"Chunking failed: {str(e)}")
