@@ -1,5 +1,5 @@
 # Dữ liệu lớn và model checkpoints
-/data/
+/data/*
 /models/*
 *.pth
 *.pt
@@ -37,8 +37,8 @@ models/*
 *.onnx
 
 # Datasete
-# data/
-dataset/
+data/*
+dataset/*
 # *.wav
 # *.mp3
 
