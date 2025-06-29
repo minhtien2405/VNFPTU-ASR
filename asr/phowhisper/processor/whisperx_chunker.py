@@ -82,8 +82,8 @@ class WhisperXChunker:
             with torch.amp.autocast(device_type=self.device, enabled=True):
                 result = self.model.transcribe(
                     audio_array,
-                    batch_size=16,
-                    chunk_size=30
+                    batch_size=4,    # giảm xuống 4 hoặc 2
+                    chunk_size=30    
                 )
             
             segments = result.get("segments", [])

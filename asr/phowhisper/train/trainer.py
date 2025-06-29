@@ -162,7 +162,7 @@ class Trainer:
             gradient_accumulation_steps=int(self.config.training.gradient_accumulation_steps),
             learning_rate=float(self.config.training.learning_rate),
             warmup_steps=int(self.config.training.warmup_steps),
-            gradient_checkpointing=True,
+            gradient_checkpointing=False,
             fp16=bool(self.config.training.fp16),
             bf16=bool(self.config.training.bf16),
             optim=self.config.training.optim,
