@@ -79,7 +79,7 @@ class WhisperXChunker:
             
             audio_array = self._preprocess_audio(audio_array)
             
-            with torch.amp.autocast(self.device, enabled=True):
+            with torch.amp.autocast(device_type=self.device, enabled=True):
                 result = self.model.transcribe(
                     audio_array,
                     batch_size=16,
