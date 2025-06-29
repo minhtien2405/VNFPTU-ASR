@@ -160,7 +160,7 @@ class Trainer:
             gradient_checkpointing=True,
             fp16=bool(self.config.training.fp16),
             optim=self.config.training.optim,
-            evaluation_strategy=self.config.training.eval_strategy,
+            eval_strategy=self.config.training.eval_strategy,
             eval_steps=int(self.config.training.eval_steps),
             save_steps=int(self.config.training.save_steps),
             save_total_limit=int(self.config.training.save_total_limit),
