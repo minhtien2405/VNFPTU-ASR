@@ -16,7 +16,19 @@ def chunk_worker(dataset, config_dict, device, worker_id, queue):
     output = []
     for i, example in enumerate(dataset):
         try:
-            chunks = chunker.chunk(example["audio"]["array"], example["audio"]["sampling_rate"])
+            audio_array = example["audio"]["array"]
+            if audio_array.dtype != np.float32:
+                print(f"[Worker {worker_id}] Warning: Audio dtype {audio_array.dtype}, converting to float32.")
+                audio_array = audio_array.astype(np.float32)
+            if np.isnan(audio_array).any() or np.isinf(audio_array).any():
+                print(f"[Worker {worker_id}] Error: Audio contains NaN/Inf, replacing with zeros.")
+                audio_array = np.nan_to_num(audio_array)
+            max_val = np.abs(audio_array).max()
+            if max_val > 0:
+                audio_array = audio_array / max_val
+            sampling_rate = example["audio"]["sampling_rate"]
+
+            chunks = chunker.chunk(audio_array, sampling_rate)
             input_features = [
                 config_dict["processor"](
                     chunk["array"],
