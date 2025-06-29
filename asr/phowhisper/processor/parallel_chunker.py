@@ -1,11 +1,8 @@
-import torch.multiprocessing as mp
-import os, json
+import torch
+import whisperx
 from datasets import Dataset
-from .whisperx_chunker import WhisperXChunker
 
-def chunk_worker(dataset, language, device, processor, worker_id, queue):
-    import torch
-    import whisperx
+def chunk_worker(dataset, language, device, processor, queue, worker_id):  # Sửa thứ tự tham số để khớp
     chunker = WhisperXChunker(
         model_path="./converted_phowhisper",
         device=device,
@@ -21,7 +18,7 @@ def chunk_worker(dataset, language, device, processor, worker_id, queue):
                     chunk["array"],
                     sampling_rate=chunk["sampling_rate"],
                     return_tensors="pt"
-                ).input_features[0]
+                ).input_features[0].to(dtype=torch.float32, device=device)  # Chuyển sang float32 và device
                 for chunk in chunks
             ]
             output.append({
