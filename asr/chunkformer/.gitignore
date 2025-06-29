@@ -1,0 +1,10 @@
+checkpoints
+data/dev-other
+__pycache__/
+decode_chunkformer_tmp.py
+data/dev-other.tsv
+data/lf_data.tsv
+decode_tmp.py
+tokenizer/
+data/4397800.wav
+benchmark_duration.py
