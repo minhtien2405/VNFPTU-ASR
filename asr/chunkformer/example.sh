@@ -1,7 +1,7 @@
 #!/bin/bash
 
 MODEL_ID="chunkformer-large-vie"
-AUDIO_FILE="data/common_voice_vi_23397238.wav"
+AUDIO_FILE="data/test02.wav"
 TOTAL_BATCH_DURATION=14400
 CHUNK_SIZE=64
 LEFT_CONTEXT_SIZE=128

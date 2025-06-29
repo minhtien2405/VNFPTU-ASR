@@ -1,0 +1,50 @@
+{
+  "os": "Linux-5.10.0-33-cloud-amd64-x86_64-with-glibc2.31",
+  "python": "CPython 3.10.15",
+  "startedAt": "2025-06-29T03:58:09.079908Z",
+  "args": [
+    "train",
+    "--config",
+    "asr/phowhisper/configs/config.yaml",
+    "--region",
+    "South"
+  ],
+  "program": "/home/phamminhtien2405/VNFPTU-ASR/asr/phowhisper/cli.py",
+  "codePath": "asr/phowhisper/cli.py",
+  "git": {
+    "remote": "https://github.com/minhtien2405/VNFPTU-ASR.git",
+    "commit": "c021316a16b34b947f31a8f2710cbf4a7a1cdf68"
+  },
+  "email": "phamminhtien2405@gmail.com",
+  "root": "/home/phamminhtien2405/VNFPTU-ASR",
+  "host": "vovinam-ai-v0-20250625-203146",
+  "executable": "/home/phamminhtien2405/VNFPTU-ASR/.venv/bin/python",
+  "codePathLocal": "asr/phowhisper/cli.py",
+  "cpu_count": 2,
+  "cpu_count_logical": 4,
+  "gpu": "NVIDIA L4",
+  "gpu_count": 1,
+  "disk": {
+    "/": {
+      "total": "211116445696",
+      "used": "158627401728"
+    }
+  },
+  "memory": {
+    "total": "16785821696"
+  },
+  "cpu": {
+    "count": 2,
+    "countLogical": 4
+  },
+  "gpu_nvidia": [
+    {
+      "name": "NVIDIA L4",
+      "memoryTotal": "24152899584",
+      "cudaCores": 7424,
+      "architecture": "Ada",
+      "uuid": "GPU-a3869659-f2d5-e958-474c-150866f40f28"
+    }
+  ],
+  "cudaVersion": "12.4"
+}

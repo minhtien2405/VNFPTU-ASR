@@ -1,0 +1,57 @@
+_wandb:
+    value:
+        cli_version: 0.20.1
+        m: []
+        python_version: 3.10.15
+        t:
+            "1":
+                - 1
+                - 5
+                - 9
+                - 11
+                - 35
+                - 41
+                - 49
+                - 51
+                - 53
+                - 71
+                - 98
+                - 100
+                - 103
+            "2":
+                - 1
+                - 5
+                - 9
+                - 11
+                - 35
+                - 41
+                - 49
+                - 51
+                - 53
+                - 71
+                - 98
+                - 100
+                - 103
+            "3":
+                - 13
+                - 16
+                - 55
+            "4": 3.10.15
+            "5": 0.20.1
+            "6": 4.52.4
+            "12": 0.20.1
+            "13": linux-x86_64
+dataset:
+    value: namespace(name='nguyendv02/ViMD_Dataset', cache_dir='./cache', sampling_rate=16000, regions=['All', 'Central', 'South', 'North'])
+eval:
+    value: namespace(compute_metrics=True, eval_on_train=False, eval_on_test=True, eval_on_dev=True, eval_on_all=False, eval_on_all_regions=True, regions=['All', 'Central', 'South', 'North'], region='south', test_split='test', dev_split='dev', train_split='train', all_split='all')
+logging:
+    value: namespace(log_dir='./logs', log_file='phowhisper_large_vi_south_v0.log')
+lora:
+    value: namespace(r=32, lora_alpha=64, target_modules=['q_proj', 'v_proj'], lora_dropout=0.05, bias='none')
+model:
+    value: namespace(model_id='vinai/PhoWhisper-large', language='vi', task='transcribe', quantization=namespace(load_in_4bit=True, bnb_4bit_compute_dtype='float16', bnb_4bit_use_double_quant=True, bnb_4bit_quant_type='nf4'), device='cuda')
+training:
+    value: namespace(output_dir='./logs/phowhisper-large-south-vi', eval_output_dir='./outputs/phowhisper-large-south-vi', per_device_train_batch_size=4, gradient_accumulation_steps=8, learning_rate='1e-5', warmup_steps=50, save_steps=100, save_total_limit=3, logging_steps=50, fp16=True, optim='adamw_bnb_8bit', eval_strategy='steps', eval_steps=100, per_device_eval_batch_size=4, metric_for_best_model='wer', greater_is_better=False, load_best_model_at_end=True, save_strategy='steps', hub_model_id='minhtien2405/phowhisper-large-south-vi')
+wandb:
+    value: namespace(project='PhoWhisper_ViMD', run_name='phowhisper_finetune_south')
