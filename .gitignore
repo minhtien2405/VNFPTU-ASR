@@ -37,10 +37,10 @@ models/*
 *.onnx
 
 # Datasete
-data/
+# data/
 dataset/
-*.wav
-*.mp3
+# *.wav
+# *.mp3
 
 # Jupyter checkpoints
 .ipynb_checkpoints/
