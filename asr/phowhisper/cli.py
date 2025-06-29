@@ -16,6 +16,8 @@ from eval.evaluator import Evaluator
 from infer.inference import Inference
 from transformers import WhisperProcessor
 
+logger = logging.getLogger(__name__)
+
 class CLIError(Exception):
     """Base exception for CLI errors"""
     pass
