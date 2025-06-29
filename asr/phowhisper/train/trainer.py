@@ -252,13 +252,13 @@ class Trainer:
         except Exception as e:
             logger.error(f"Evaluation failed: {str(e)}")
 
-        model_dir = os.path.join(os.getcwd(), "models", f"phowhisper-small-{self.config.region.lower()}-vi")
+        model_dir = os.path.join(os.getcwd(), "models", f"phowhisper-base-{self.config.region.lower()}-vi")
         self.trainer.save_model(model_dir)
         self.processor.save_pretrained(model_dir)
         logger.info("Model and processor saved locally")
 
         self.trainer.push_to_hub(
-            commit_message=f"Fine-tuned PhoWhisper small with WhisperX chunking on ViMD ({self.config.region})",
+            commit_message=f"Fine-tuned PhoWhisper base with WhisperX chunking on ViMD ({self.config.region})",
             tags=["speech-recognition", "vietnamese", "whisperx", f"region-{self.config.region.lower()}"],
             dataset=self.config.dataset.name,
             language=self.config.model.language,

@@ -1,5 +1,5 @@
 model:
-  model_id: "vinai/PhoWhisper-small"
+  model_id: "vinai/PhoWhisper-base"
   language: "vi"
   task: "transcribe"
   quantization:
@@ -23,8 +23,8 @@ dataset:
   regions: ["All", "Central", "South", "North"]
 
 training:
-  output_dir: "./logs/phowhisper-small-{region}-vi"
-  eval_output_dir: "./outputs/phowhisper-small-{region}-vi"
+  output_dir: "./logs/phowhisper-base-{region}-vi"
+  eval_output_dir: "./outputs/phowhisper-base-{region}-vi"
   per_device_train_batch_size: 1
   gradient_accumulation_steps: 2
   learning_rate: 1e-5
@@ -42,7 +42,7 @@ training:
   greater_is_better: false
   load_best_model_at_end: true
   save_strategy: "steps"
-  hub_model_id: "minhtien2405/phowhisper-small-{region}-vi"
+  hub_model_id: "minhtien2405/phowhisper-base-{region}-vi"
 
 eval:
   compute_metrics: true
@@ -64,4 +64,4 @@ wandb:
 
 logging:
   log_dir: "./logs"
-  log_file: "phowhisper_small_vi_{region}_v0.log"
+  log_file: "phowhisper_base_vi_{region}_v0.log"
