@@ -86,7 +86,6 @@ class DataProcessor:
         mp.set_start_method("spawn", force=True)
         queue = mp.Queue()
 
-        # Tách dataset đều cho từng worker
         chunks = [dataset.shard(num_workers, i) for i in range(num_workers)]
 
         config_dict = {
@@ -98,7 +97,7 @@ class DataProcessor:
         processes = []
         for i in range(num_workers):
             p = mp.Process(target=chunk_worker, args=(chunks[i], config_dict, self.device, i, queue))
-            p.start()
+            p.start()   
             processes.append(p)
 
         results = []

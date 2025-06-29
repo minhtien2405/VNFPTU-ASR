@@ -42,11 +42,5 @@ class WhisperXChunker:
             for segment in segments
         ]
         logger.debug(f"[WhisperXChunker] Chunked audio into {len(chunks)} segments")
-        
-        for chunk in chunks:
-            if isinstance(chunk["array"], torch.Tensor):
-                chunk["array"] = chunk["array"].to(dtype=torch.float32)
-            elif isinstance(chunk["array"], np.ndarray):
-                chunk["array"] = chunk["array"].astype(np.float32)
-    
+
         return chunks

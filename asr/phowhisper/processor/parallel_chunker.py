@@ -1,39 +1,33 @@
-import torch
-import whisperx
+import torch.multiprocessing as mp
+import os, json
 from datasets import Dataset
 from .whisperx_chunker import WhisperXChunker
 import numpy as np
 
-
-def chunk_worker(dataset, language, device, processor, queue, worker_id):
+def chunk_worker(dataset, config_dict, device, worker_id, queue):
+    import torch
+    import whisperx
     chunker = WhisperXChunker(
-        model_path="./converted_phowhisper",
+        model_path=config_dict["model_path"],
         device=device,
-        language=language
+        language=config_dict["language"],
     )
 
     output = []
     for i, example in enumerate(dataset):
         try:
-            # Chuyển đổi audio array sang float32
-            audio_array = example["audio"]["array"]
-            if isinstance(audio_array, np.ndarray):
-                audio_array = audio_array.astype(np.float32)
-            elif isinstance(audio_array, torch.Tensor):
-                audio_array = audio_array.to(dtype=torch.float32)
-
-            chunks = chunker.chunk(audio_array, example["audio"]["sampling_rate"])
+            chunks = chunker.chunk(example["audio"]["array"], example["audio"]["sampling_rate"])
             input_features = [
-                processor(
+                config_dict["processor"](
                     chunk["array"],
                     sampling_rate=chunk["sampling_rate"],
                     return_tensors="pt"
-                ).input_features[0].to(dtype=torch.float32, device=device)  # Chuyển sang float32 và device
+                ).input_features[0]
                 for chunk in chunks
             ]
             output.append({
                 "input_features": input_features,
-                "labels": processor.tokenizer(example["text"]).input_ids
+                "labels": config_dict["processor"].tokenizer(example["text"]).input_ids
             })
         except Exception as e:
             print(f"[Worker {worker_id}] Error on sample {i}: {e}")
