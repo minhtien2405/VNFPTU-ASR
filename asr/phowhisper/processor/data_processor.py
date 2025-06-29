@@ -136,12 +136,12 @@ class DataProcessor:
                 process_fn,
                 remove_columns=dataset.column_names,
                 num_proc=1,
-                desc="Processing dataset",
-                error_handling=True
+                desc="Processing dataset"
             )
             
             logger.info(f"Dataset processing completed successfully: {len(processed)} samples")
             return processed
 
         except Exception as e:
+            logger.error(f"Dataset processing failed: {str(e)}")
             raise DataProcessorError(f"Dataset processing failed: {str(e)}")
