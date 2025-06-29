@@ -82,7 +82,8 @@ class DataProcessor:
         import multiprocessing as mp
         from processor.parallel_chunker import chunk_worker
 
-        num_workers = 2
+        num_workers = mp.cpu_count() // 2
+        logger.info(f"[DataProcessor] Preprocessing dataset with {num_workers} workers using multiprocessing")
         mp.set_start_method("spawn", force=True)
         queue = mp.Queue()
 
