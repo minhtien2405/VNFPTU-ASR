@@ -5,7 +5,7 @@ import logging
 import numpy as np
 from dataclasses import dataclass
 from typing import Any, Dict, List, Union
-from transformers import (
+from transformers: (
     WhisperForConditionalGeneration,
     Seq2SeqTrainer,
     Seq2SeqTrainingArguments,
@@ -116,18 +116,48 @@ class Trainer:
         return peft_model
 
     def _log_model_stats(self):
-        total_params = sum(p.numel() for p in self.model.parameters())
-        trainable_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
-        input_size = (1, 80, 3000)
-        flops, _ = profile(self.model, inputs=(torch.randn(input_size).to(self.device),), verbose=False)
+        """Log model statistics to wandb"""
+        try:
+            # Get parameter counts
+            total_params = sum(p.numel() for p in self.model.parameters())
+            trainable_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
+            
+            # Create dummy input for FLOPs calculation
+            input_size = (1, 80, 3000)
+            dummy_input = torch.randn(input_size).to(self.device)
 
-        wandb.log({
-            "total_params": total_params,
-            "trainable_params": trainable_params,
-            "model_flops": flops
-        })
+            # Reset model hooks before profiling
+            for module in self.model.modules():
+                if hasattr(module, '_forward_hooks'):
+                    module._forward_hooks.clear()
+                if hasattr(module, '_forward_pre_hooks'):
+                    module._forward_pre_hooks.clear()
+                if hasattr(module, 'total_ops'):
+                    delattr(module, 'total_ops')
+                if hasattr(module, 'total_params'):
+                    delattr(module, 'total_params')
 
-        logger.info(f"Model stats - Total params: {total_params}, Trainable params: {trainable_params}, FLOPs: {flops}")
+            # Calculate FLOPs
+            flops, _ = profile(self.model, inputs=(dummy_input,), verbose=False)
+
+            # Log stats
+            stats = {
+                "total_params": total_params,
+                "trainable_params": trainable_params,
+                "trainable_percent": (trainable_params / total_params) * 100,
+                "model_flops": flops
+            }
+            
+            wandb.log(stats)
+            logger.info(
+                f"Model stats - Total: {total_params:,}, "
+                f"Trainable: {trainable_params:,} ({stats['trainable_percent']:.2f}%), "
+                f"FLOPs: {flops:,}"
+            )
+
+        except Exception as e:
+            logger.warning(f"Failed to calculate model stats: {str(e)}")
+            logger.warning("Continuing training without FLOPs calculation")
 
     def _setup_trainer(self):
         training_args = Seq2SeqTrainingArguments(
