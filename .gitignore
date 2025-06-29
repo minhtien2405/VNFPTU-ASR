@@ -30,6 +30,7 @@ mlruns/*
 
 # Models
 converted_phowhisper/
+chunkformer-large-vie/
 models/*
 *.pt
 *.pth
