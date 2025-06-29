@@ -215,7 +215,7 @@ class Trainer:
             callbacks=[
                 WandbCallback(), 
                 EarlyStoppingCallback(
-                    early_stopping_patience=10,
+                    early_stopping_patience=4,
                     early_stopping_threshold=0.0
                 )
             ],
