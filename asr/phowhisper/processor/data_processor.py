@@ -20,7 +20,8 @@ def prepare_dataset(
     processor: WhisperProcessor,
     chunker: WhisperXChunker,
     region: str,
-    chunk_threshold: float = 30.0
+    chunk_threshold: float = 30.0,
+    max_label_length: int = 448  # Add max length parameter
 ) -> Dict:
     try:
         audio = batch["audio"]
@@ -50,8 +51,29 @@ def prepare_dataset(
             for chunk in chunks
         ]
         
-        # Process text
-        batch["labels"] = processor.tokenizer(batch["text"]).input_ids
+        # If audio was chunked, duplicate the text for each chunk
+        if len(chunks) > 1:
+            # Create labels for each chunk
+            encoded_labels = [
+                processor.tokenizer(
+                    batch["text"], 
+                    truncation=True,
+                    max_length=max_label_length,
+                    return_tensors="pt"
+                ).input_ids[0]
+                for _ in chunks
+            ]
+            batch["labels"] = encoded_labels
+        else:
+            # Single chunk case
+            encoded = processor.tokenizer(
+                batch["text"], 
+                truncation=True,
+                max_length=max_label_length,
+                return_tensors="pt"
+            )
+            batch["labels"] = encoded.input_ids[0]
+        
         return batch
 
     except Exception as e:
@@ -64,6 +86,7 @@ class DataProcessor:
         self.processor = processor
         self.device = device
         self.region = config.region.lower()
+        self.max_label_length = 448  # Add as class attribute
         
         try:
             self.chunker = WhisperXChunker(
@@ -129,7 +152,8 @@ class DataProcessor:
                 processor=self.processor,
                 chunker=self.chunker,
                 region=self.region,
-                chunk_threshold=30.0
+                chunk_threshold=30.0,
+                max_label_length=self.max_label_length  # Pass max length
             )
 
             processed = dataset.map(
