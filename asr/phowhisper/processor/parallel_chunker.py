@@ -3,7 +3,8 @@ import whisperx
 from datasets import Dataset
 from .whisperx_chunker import WhisperXChunker
 
-def chunk_worker(dataset, language, device, processor, queue, worker_id):  # Sửa thứ tự tham số để khớp
+
+def chunk_worker(dataset, language, device, processor, queue, worker_id):
     chunker = WhisperXChunker(
         model_path="./converted_phowhisper",
         device=device,
@@ -13,7 +14,14 @@ def chunk_worker(dataset, language, device, processor, queue, worker_id):  # S�
     output = []
     for i, example in enumerate(dataset):
         try:
-            chunks = chunker.chunk(example["audio"]["array"], example["audio"]["sampling_rate"])
+            # Chuyển đổi audio array sang float32
+            audio_array = example["audio"]["array"]
+            if isinstance(audio_array, np.ndarray):
+                audio_array = audio_array.astype(np.float32)
+            elif isinstance(audio_array, torch.Tensor):
+                audio_array = audio_array.to(dtype=torch.float32)
+
+            chunks = chunker.chunk(audio_array, example["audio"]["sampling_rate"])
             input_features = [
                 processor(
                     chunk["array"],
