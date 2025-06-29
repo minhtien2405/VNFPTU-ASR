@@ -194,21 +194,38 @@ class Trainer:
         def compute_metrics(pred):
             pred_ids = pred.predictions
             label_ids = pred.label_ids
+            
             label_ids[label_ids == -100] = self.processor.tokenizer.pad_token_id
+
             pred_str = self.processor.tokenizer.batch_decode(pred_ids, skip_special_tokens=True)
             label_str = self.processor.tokenizer.batch_decode(label_ids, skip_special_tokens=True)
-            wer = 100 * metric.compute(predictions=pred_str, references=label_str)
+
+            try:
+                wer_score = float(metric.compute(predictions=pred_str, references=label_str))
+                wer = 100 * wer_score
+            except Exception as e:
+                logger.error(f"WER computation failed: {e}")
+                wer = float('inf')
+                
             return {"wer": wer}
 
-        return Seq2SeqTrainer(
+        trainer = Seq2SeqTrainer(
             model=self.model,
             args=training_args,
             train_dataset=self.train_dataset,
             eval_dataset=self.valid_dataset,
             data_collator=data_collator,
             compute_metrics=compute_metrics,
-            callbacks=[WandbCallback(), EarlyStoppingCallback(early_stopping_patience=10)],
+            callbacks=[
+                WandbCallback(), 
+                EarlyStoppingCallback(
+                    early_stopping_patience=10,
+                    early_stopping_threshold=0.0
+                )
+            ],
         )
+        
+        return trainer
 
     def train(self):
         checkpoint_path = os.path.join(self.config.training.output_dir, "checkpoint-last")
