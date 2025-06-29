@@ -28,12 +28,10 @@ class WhisperXChunker:
         return self._model
 
     def chunk(self, audio_array: np.ndarray, sampling_rate: int) -> List[Dict[str, Union[np.ndarray, int]]]:
-        # Professional: check dtype, warn if not float32, check for NaN/Inf
+        # Chuyển đổi âm thầm, không warning nữa
         if audio_array.dtype != np.float32:
-            logger.warning(f"[WhisperXChunker] Audio array dtype is {audio_array.dtype}, converting to float32 for model compatibility.")
             audio_array = audio_array.astype(np.float32)
         if np.isnan(audio_array).any() or np.isinf(audio_array).any():
-            logger.error("[WhisperXChunker] Audio array contains NaN or Inf values. These will be replaced with zeros.")
             audio_array = np.nan_to_num(audio_array)
         max_val = np.abs(audio_array).max()
         if max_val > 0:
