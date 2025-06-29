@@ -122,66 +122,57 @@ class Trainer:
             total_params = sum(p.numel() for p in self.model.parameters())
             trainable_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
             
-            # Create dummy input for FLOPs calculation
-            input_size = (1, 80, 3000)
-            dummy_input = torch.randn(input_size).to(self.device)
-
-            # Reset model hooks before profiling
-            for module in self.model.modules():
-                if hasattr(module, '_forward_hooks'):
-                    module._forward_hooks.clear()
-                if hasattr(module, '_forward_pre_hooks'):
-                    module._forward_pre_hooks.clear()
-                if hasattr(module, 'total_ops'):
-                    delattr(module, 'total_ops')
-                if hasattr(module, 'total_params'):
-                    delattr(module, 'total_params')
-
-            # Calculate FLOPs
-            flops, _ = profile(self.model, inputs=(dummy_input,), verbose=False)
-
-            # Log stats
+            # Log basic stats without FLOPs calculation
             stats = {
                 "total_params": total_params,
                 "trainable_params": trainable_params,
                 "trainable_percent": (trainable_params / total_params) * 100,
-                "model_flops": flops
             }
             
             wandb.log(stats)
             logger.info(
                 f"Model stats - Total: {total_params:,}, "
-                f"Trainable: {trainable_params:,} ({stats['trainable_percent']:.2f}%), "
-                f"FLOPs: {flops:,}"
+                f"Trainable: {trainable_params:,} ({stats['trainable_percent']:.2f}%)"
             )
 
+            # Skip FLOPs calculation for now as it's causing issues
+            
         except Exception as e:
             logger.warning(f"Failed to calculate model stats: {str(e)}")
-            logger.warning("Continuing training without FLOPs calculation")
+            logger.warning("Continuing training without model stats")
 
     def _setup_trainer(self):
+        # Format output directory with region
+        output_dir = self.config.training.output_dir.format(region=self.config.region.lower())
+        eval_output_dir = self.config.training.eval_output_dir.format(region=self.config.region.lower())
+        hub_model_id = self.config.training.hub_model_id.format(region=self.config.region.lower())
+
+        # Ensure directories exist
+        os.makedirs(output_dir, exist_ok=True)
+        os.makedirs(eval_output_dir, exist_ok=True)
+
         training_args = Seq2SeqTrainingArguments(
-            output_dir=self.config.training.output_dir,
-            per_device_train_batch_size=self.config.training.per_device_train_batch_size,
-            gradient_accumulation_steps=self.config.training.gradient_accumulation_steps,
-            learning_rate=self.config.training.learning_rate,
-            warmup_steps=self.config.training.warmup_steps,
+            output_dir=output_dir,
+            per_device_train_batch_size=int(self.config.training.per_device_train_batch_size),
+            gradient_accumulation_steps=int(self.config.training.gradient_accumulation_steps),
+            learning_rate=float(self.config.training.learning_rate),
+            warmup_steps=int(self.config.training.warmup_steps),
             gradient_checkpointing=True,
-            fp16=self.config.training.fp16,
+            fp16=bool(self.config.training.fp16),
             optim=self.config.training.optim,
-            eval_strategy=self.config.training.eval_strategy,
-            eval_steps=self.config.training.eval_steps,
-            save_steps=self.config.training.save_steps,
-            save_total_limit=self.config.training.save_total_limit,
-            per_device_eval_batch_size=self.config.training.per_device_eval_batch_size,
-            logging_steps=self.config.training.logging_steps,
+            evaluation_strategy=self.config.training.eval_strategy,
+            eval_steps=int(self.config.training.eval_steps),
+            save_steps=int(self.config.training.save_steps),
+            save_total_limit=int(self.config.training.save_total_limit),
+            per_device_eval_batch_size=int(self.config.training.per_device_eval_batch_size),
+            logging_steps=int(self.config.training.logging_steps),
             metric_for_best_model=self.config.training.metric_for_best_model,
-            greater_is_better=self.config.training.greater_is_better,
+            greater_is_better=bool(self.config.training.greater_is_better),
             load_best_model_at_end=True,
             save_strategy="steps",
             push_to_hub=True,
             remove_unused_columns=False,
-            hub_model_id=self.config.training.hub_model_id,
+            hub_model_id=hub_model_id,
         )
 
         data_collator = DataCollatorSpeechSeq2SeqWithPadding(
@@ -228,6 +219,7 @@ class Trainer:
         return trainer
 
     def train(self):
+        logger.info("Starting training...")
         checkpoint_path = os.path.join(self.config.training.output_dir, "checkpoint-last")
         resume = checkpoint_path if os.path.exists(checkpoint_path) else None
         if resume:
