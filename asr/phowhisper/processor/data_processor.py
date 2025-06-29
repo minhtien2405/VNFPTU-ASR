@@ -1,14 +1,19 @@
 import logging
 import numpy as np
-from typing import List, Dict, Union
+from typing import List, Dict, Union, Tuple, Optional
 from datasets import load_dataset, Audio, Dataset
 from transformers import WhisperProcessor
 from functools import partial
 import wandb
+from pathlib import Path
 
-from processor.whisperx_chunker import WhisperXChunker
+from processor.whisperx_chunker import WhisperXChunker, WhisperXChunkerError
 
 logger = logging.getLogger(__name__)
+
+class DataProcessorError(Exception):
+    """Custom exception for DataProcessor errors"""
+    pass
 
 def prepare_dataset(
     batch: Dict,
@@ -17,114 +22,126 @@ def prepare_dataset(
     region: str,
     chunk_threshold: float = 30.0
 ) -> Dict:
-    audio = batch["audio"]
-    audio_array = audio["array"]
+    try:
+        audio = batch["audio"]
+        audio_array = audio["array"]
+        sampling_rate = audio["sampling_rate"]
 
-    # if audio_array.dtype != np.float32:
-    #     audio_array = audio_array.astype(np.float32)
+        if not isinstance(audio_array, np.ndarray):
+            raise ValueError("Audio array must be numpy.ndarray")
 
-    if np.abs(audio_array).max() > 0:
-        audio_array = audio_array / np.abs(audio_array).max()
+        # Normalize if needed
+        if np.abs(audio_array).max() > 0:
+            audio_array = audio_array / np.abs(audio_array).max()
 
-    sampling_rate = audio["sampling_rate"]
-    audio_length = len(audio_array) / sampling_rate
+        # Decide chunking based on audio length
+        audio_length = len(audio_array) / sampling_rate
+        chunks = (chunker.chunk(audio_array, sampling_rate) 
+                 if audio_length > chunk_threshold 
+                 else [{"array": audio_array, "sampling_rate": sampling_rate}])
 
-    if audio_length > chunk_threshold:
-        chunks = chunker.chunk(audio_array, sampling_rate)
-    else:
-        chunks = [{"array": audio_array, "sampling_rate": sampling_rate}]
+        # Process each chunk
+        batch["input_features"] = [
+            processor(
+                chunk["array"], 
+                sampling_rate=chunk["sampling_rate"], 
+                return_tensors="pt"
+            ).input_features[0]
+            for chunk in chunks
+        ]
+        
+        # Process text
+        batch["labels"] = processor.tokenizer(batch["text"]).input_ids
+        return batch
 
-    batch["input_features"] = [
-        processor(chunk["array"], sampling_rate=chunk["sampling_rate"], return_tensors="pt").input_features[0]
-        for chunk in chunks
-    ]
-    batch["labels"] = processor.tokenizer(batch["text"]).input_ids
-    return batch
-
+    except Exception as e:
+        logger.error(f"Failed to prepare dataset batch: {str(e)}")
+        raise DataProcessorError(f"Batch processing failed: {str(e)}")
 
 class DataProcessor:
-    def __init__(self, config, processor: WhisperProcessor, device: str):
+    def __init__(self, config: object, processor: WhisperProcessor, device: str):
         self.config = config
         self.processor = processor
         self.device = device
         self.region = config.region.lower()
+        
+        try:
+            self.chunker = WhisperXChunker(
+                model_path=Path("./converted_phowhisper"),
+                device=device,
+                language=config.model.language,
+            )
+            logger.info(f"DataProcessor initialized for region '{self.region}'")
+            
+        except Exception as e:
+            raise DataProcessorError(f"Failed to initialize DataProcessor: {str(e)}")
 
-        self.chunker = WhisperXChunker(
-            model_path="./converted_phowhisper",
-            device=device,
-            language=config.model.language,
-        )
+    def load_dataset(self) -> Tuple[Dataset, Dataset]:
+        """Load and prepare the dataset"""
+        try:
+            logger.info(f"Loading dataset: {self.config.dataset.name}")
+            dataset = load_dataset(
+                self.config.dataset.name, 
+                cache_dir=self.config.dataset.cache_dir
+            )
+            
+            # Cast audio columns
+            train_dataset = dataset["train"].cast_column(
+                "audio", 
+                Audio(sampling_rate=self.config.dataset.sampling_rate)
+            )
+            valid_dataset = dataset["valid"].cast_column(
+                "audio", 
+                Audio(sampling_rate=self.config.dataset.sampling_rate)
+            )
 
-        logger.info(f"[DataProcessor] Initialized on region '{self.region}'. Chunker is ready for lazy loading.")
+            # Filter by region if needed
+            if self.region != "all":
+                train_dataset = self._filter_by_region(train_dataset)
+                valid_dataset = self._filter_by_region(valid_dataset)
 
-    def load_dataset(self) -> (Dataset, Dataset):
-        logger.info(f"[DataProcessor] Loading dataset: {self.config.dataset.name}")
-        dataset = load_dataset(self.config.dataset.name, cache_dir=self.config.dataset.cache_dir)
-        train_dataset = dataset["train"].cast_column("audio", Audio(sampling_rate=self.config.dataset.sampling_rate))
-        valid_dataset = dataset["valid"].cast_column("audio", Audio(sampling_rate=self.config.dataset.sampling_rate))
+            # Log dataset sizes
+            if wandb.run:
+                wandb.log({
+                    "dataset_size_train": len(train_dataset),
+                    "dataset_size_valid": len(valid_dataset)
+                })
 
-        if self.region != "all":
-            train_dataset = self._filter_by_region(train_dataset, split="train")
-            valid_dataset = self._filter_by_region(valid_dataset, split="valid")
+            logger.info(f"Dataset loaded successfully. Train size: {len(train_dataset)}, Valid size: {len(valid_dataset)}")
+            return train_dataset, valid_dataset
 
-        if wandb.run:
-            wandb.log({
-                "dataset_size_train": len(train_dataset),
-                "dataset_size_valid": len(valid_dataset)
-            })
+        except Exception as e:
+            raise DataProcessorError(f"Failed to load dataset: {str(e)}")
 
-        return train_dataset, valid_dataset
-
-    def _filter_by_region(self, dataset: Dataset, split: str) -> Dataset:
-        return dataset.filter(lambda x: x["region"].lower() == self.region)
-    
-    # def process(self, dataset: Dataset) -> Dataset:
-    #     import multiprocessing as mp
-    #     from processor.parallel_chunker import chunk_worker
-
-    #     num_workers = mp.cpu_count() // 2
-    #     logger.info(f"[DataProcessor] Preprocessing dataset with {num_workers} workers using multiprocessing")
-    #     mp.set_start_method("spawn", force=True)
-    #     queue = mp.Queue()
-
-    #     chunks = [dataset.shard(num_workers, i) for i in range(num_workers)]
-
-    #     config_dict = {
-    #         "model_path": "./converted_phowhisper",
-    #         "language": self.config.model.language,
-    #         "processor": self.processor
-    #     }
-
-    #     processes = []
-    #     for i in range(num_workers):
-    #         p = mp.Process(target=chunk_worker, args=(chunks[i], config_dict, self.device, i, queue))
-    #         p.start()   
-    #         processes.append(p)
-
-    #     results = []
-    #     for _ in processes:
-    #         results.extend(queue.get())
-
-    #     for p in processes:
-    #         p.join()
-
-    #     return Dataset.from_list(results)
-
+    def _filter_by_region(self, dataset: Dataset) -> Dataset:
+        """Filter dataset by region"""
+        filtered = dataset.filter(lambda x: x["region"].lower() == self.region)
+        logger.debug(f"Filtered dataset for region {self.region}: {len(filtered)} samples")
+        return filtered
 
     def process(self, dataset: Dataset) -> Dataset:
-        logger.info(f"[DataProcessor] Preprocessing dataset with multiprocessing")
+        """Process the dataset in single-processing mode"""
+        try:
+            logger.info("Processing dataset in single-processing mode")
+            
+            process_fn = partial(
+                prepare_dataset,
+                processor=self.processor,
+                chunker=self.chunker,
+                region=self.region,
+                chunk_threshold=30.0
+            )
 
-        process_fn = partial(
-            prepare_dataset,
-            processor=self.processor,
-            chunker=self.chunker,
-            region=self.region,
-            chunk_threshold=30.0
-        )
+            processed = dataset.map(
+                process_fn,
+                remove_columns=dataset.column_names,
+                num_proc=1,
+                desc="Processing dataset",
+                error_handling=True
+            )
+            
+            logger.info(f"Dataset processing completed successfully: {len(processed)} samples")
+            return processed
 
-        return dataset.map(
-            process_fn,
-            remove_columns=dataset.column_names,
-            num_proc=1,
-            desc="Preprocessing dataset"
-        )
+        except Exception as e:
+            raise DataProcessorError(f"Dataset processing failed: {str(e)}")
