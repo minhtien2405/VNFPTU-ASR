@@ -1,6 +1,7 @@
 import torch
 import whisperx
 from datasets import Dataset
+from .whisperx_chunker import WhisperXChunker
 
 def chunk_worker(dataset, language, device, processor, queue, worker_id):  # Sửa thứ tự tham số để khớp
     chunker = WhisperXChunker(
