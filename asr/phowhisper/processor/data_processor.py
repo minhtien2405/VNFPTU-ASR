@@ -51,28 +51,17 @@ def prepare_dataset(
             for chunk in chunks
         ]
         
-        # If audio was chunked, duplicate the text for each chunk
-        if len(chunks) > 1:
-            # Create labels for each chunk
-            encoded_labels = [
-                processor.tokenizer(
-                    batch["text"], 
-                    truncation=True,
-                    max_length=max_label_length,
-                    return_tensors="pt"
-                ).input_ids[0]
-                for _ in chunks
-            ]
-            batch["labels"] = encoded_labels
-        else:
-            # Single chunk case
-            encoded = processor.tokenizer(
+        # Always create a list of labels, one per chunk (even if only one chunk)
+        encoded_labels = [
+            processor.tokenizer(
                 batch["text"], 
                 truncation=True,
                 max_length=max_label_length,
                 return_tensors="pt"
-            )
-            batch["labels"] = encoded.input_ids[0]
+            ).input_ids[0]
+            for _ in chunks
+        ]
+        batch["labels"] = encoded_labels
         
         return batch
 
