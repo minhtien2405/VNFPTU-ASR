@@ -164,6 +164,7 @@ class Trainer:
             warmup_steps=int(self.config.training.warmup_steps),
             gradient_checkpointing=True,
             fp16=bool(self.config.training.fp16),
+            bf16=bool(self.config.training.bf16),
             optim=self.config.training.optim,
             eval_strategy=self.config.training.eval_strategy,
             eval_steps=int(self.config.training.eval_steps),

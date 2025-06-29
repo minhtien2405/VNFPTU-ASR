@@ -32,8 +32,9 @@ training:
   save_steps: 100
   save_total_limit: 3
   logging_steps: 50
-  fp16: true
-  optim: "adamw_bnb_8bit" 
+  fp16: false
+  bf16: true
+  optim: "paged_adamw_8bit"
   eval_strategy: "steps"
   eval_steps: 100
   per_device_eval_batch_size: 1
