@@ -2,6 +2,7 @@ import torch
 import whisperx
 from datasets import Dataset
 from .whisperx_chunker import WhisperXChunker
+import numpy as np
 
 
 def chunk_worker(dataset, language, device, processor, queue, worker_id):
