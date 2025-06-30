@@ -1,0 +1,1 @@
+{"_runtime":117.676596541,"_wandb":{"runtime":190},"total_params":416254976,"train/epoch":0.022701475595913734,"trainable_percent":1.1335821244332704,"train/loss":1.3742,"trainable_params":4718592,"_timestamp":1.751230940981611e+09,"train/grad_norm":2.1417055130004883,"train/global_step":50,"train/learning_rate":9.800000000000001e-06,"_step":1}
