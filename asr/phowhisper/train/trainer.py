@@ -148,16 +148,16 @@ class Trainer:
 
     def _setup_trainer(self):
         # Format output directory with region
-        output_dir = self.config.training.output_dir.format(region=self.config.region.lower())
+        train_output_dir = self.config.training.train_output_dir.format(region=self.config.region.lower())
         eval_output_dir = self.config.training.eval_output_dir.format(region=self.config.region.lower())
         hub_model_id = self.config.training.hub_model_id.format(region=self.config.region.lower())
 
         # Ensure directories exist
-        os.makedirs(output_dir, exist_ok=True)
+        os.makedirs(train_output_dir, exist_ok=True)
         os.makedirs(eval_output_dir, exist_ok=True)
 
         training_args = Seq2SeqTrainingArguments(
-            output_dir=output_dir,
+            output_dir=train_output_dir,
             per_device_train_batch_size=int(self.config.training.per_device_train_batch_size),
             gradient_accumulation_steps=int(self.config.training.gradient_accumulation_steps),
             learning_rate=float(self.config.training.learning_rate),
@@ -227,7 +227,7 @@ class Trainer:
 
     def train(self):
         logger.info("Starting training...")
-        checkpoint_path = os.path.join(self.config.training.output_dir, "checkpoint-last")
+        checkpoint_path = os.path.join(self.config.training.train_output_dir, "checkpoint-last")
         resume = checkpoint_path if os.path.exists(checkpoint_path) else None
         if resume:
             logger.info(f"Resuming training from checkpoint: {checkpoint_path}")

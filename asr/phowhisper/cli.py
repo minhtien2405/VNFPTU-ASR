@@ -82,10 +82,10 @@ def setup_logging(config_path: str, region: str) -> None:
     try:
         config = Config(config_path, region)
         log_dir = Path(config.logging.log_dir)
-        eval_dir = Path(config.training.eval_output_dir)
+        output_dir = Path(config.logging.output_dir)        
         
         log_dir.mkdir(exist_ok=True)
-        eval_dir.mkdir(exist_ok=True)
+        output_dir.mkdir(exist_ok=True)
         
         logging.basicConfig(
             filename=log_dir / config.logging.log_file,
@@ -122,7 +122,7 @@ def train(config: str, region: str) -> None:
             task=config_obj.model.task
         )
         
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
         data_processor = DataProcessor(config_obj, processor, device)
         
         train_dataset, valid_dataset = data_processor.load_dataset()
