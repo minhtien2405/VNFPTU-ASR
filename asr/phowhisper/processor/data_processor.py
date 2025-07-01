@@ -21,52 +21,53 @@ def prepare_dataset(
     chunker: WhisperXChunker,
     region: str,
     chunk_threshold: float = 30.0,
-    max_label_length: int = 448  # Add max length parameter
+    max_label_length: int = 448
 ) -> Dict:
     try:
         audio = batch["audio"]
         audio_array = audio["array"]
         sampling_rate = audio["sampling_rate"]
 
-        if not isinstance(audio_array, np.ndarray):
-            raise ValueError("Audio array must be numpy.ndarray")
-
         # Normalize if needed
         if np.abs(audio_array).max() > 0:
             audio_array = audio_array / np.abs(audio_array).max()
 
-        # Decide chunking based on audio length
+        # Get chunks with timestamps
         audio_length = len(audio_array) / sampling_rate
-        logger.debug(f"Processing audio of length {audio_length:.2f} seconds")
-        
         chunks = (chunker.chunk(audio_array, sampling_rate) 
                  if audio_length > chunk_threshold 
                  else [{"array": audio_array, "sampling_rate": sampling_rate}])
-        
-        logger.debug(f"Number of chunks created: {len(chunks)}")
 
-        # Process each chunk
-        batch["input_features"] = [
-            processor(
-                chunk["array"], 
-                sampling_rate=chunk["sampling_rate"], 
+        # Process features and store timing info
+        features_with_timing = []
+        for chunk in chunks:
+            features = processor(
+                chunk["array"],
+                sampling_rate=chunk["sampling_rate"],
                 return_tensors="pt"
             ).input_features[0]
-            for chunk in chunks
-        ]
+            
+            timing_info = {
+                "start": chunk.get("start", 0),
+                "end": chunk.get("end", len(chunk["array"])/chunk["sampling_rate"])
+            }
+            
+            features_with_timing.append((features, timing_info))
+
+        batch["input_features"] = [f[0] for f in features_with_timing]
+        batch["timing_info"] = [f[1] for f in features_with_timing]
         
-        # Always create a list of labels, one per chunk (even if only one chunk)
-        encoded_labels = [
+        # Create labels for each chunk
+        batch["labels"] = [
             processor.tokenizer(
-                batch["text"], 
+                batch["text"],
                 truncation=True,
                 max_length=max_label_length,
                 return_tensors="pt"
             ).input_ids[0]
             for _ in chunks
         ]
-        batch["labels"] = encoded_labels
-        
+
         return batch
 
     except Exception as e:
