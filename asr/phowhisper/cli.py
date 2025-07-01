@@ -210,4 +210,17 @@ def infer(config: str, model_path: str, audio_path: str, region: str) -> None:
         inference = Inference(config_obj, model_path)
         results = inference.infer(audio_path)
         
-       
+        click.echo("\n🔍 Transcription Result")
+        for seg in results:
+            click.echo(
+                f"⏰ [{seg['start_time']:.2f}s - {seg['end_time']:.2f}s]: "
+                f"💬 {seg['text']} "
+                f"(⚡ Latency: {seg['latency']:.2f}s)"
+            )
+            
+    except Exception as e:
+        logger.error(f"Inference failed: {e}")
+        raise click.ClickException(str(e))
+
+if __name__ == '__main__':
+    cli()
