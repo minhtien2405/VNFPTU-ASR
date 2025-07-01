@@ -119,8 +119,7 @@ def train(config: str, region: str) -> None:
         setup_wandb(config_obj)
         
         if torch.cuda.is_available():
-            device = config_obj.model.device if config_obj.model.device else "cuda"
-            logger.info(f"Using GPU device: {device} - {torch.cuda.get_device_name(device.split(':')[1])}")
+            device = 'cuda'
         else:
             device = 'cpu'
             logger.info("Using CPU device")
