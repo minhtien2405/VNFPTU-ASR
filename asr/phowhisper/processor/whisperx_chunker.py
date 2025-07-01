@@ -80,6 +80,9 @@ class WhisperXChunker:
             if not isinstance(audio_array, np.ndarray):
                 raise ValueError("Input must be a numpy array")
             
+            # Convert to float32
+            audio_array = audio_array.astype(np.float32)
+            
             # Handle NaN and Inf values
             if np.isnan(audio_array).any() or np.isinf(audio_array).any():
                 logger.warning("Found NaN or Inf values in audio array, replacing with zeros")

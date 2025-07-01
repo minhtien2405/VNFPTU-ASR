@@ -26,7 +26,7 @@ def prepare_dataset(
 ) -> Dict:
     try:
         audio = batch["audio"]
-        audio_array = audio["array"]
+        audio_array = audio["array"].astype(np.float32)  # Ensure float32
         sampling_rate = audio["sampling_rate"]
 
         # Normalize if needed
