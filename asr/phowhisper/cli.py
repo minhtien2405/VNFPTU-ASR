@@ -112,7 +112,7 @@ def cli():
 @cli.command()
 @click.option('--config', type=click.Path(exists=True), default='phowhisper/configs/config.yaml')
 @click.option('--region', type=click.Choice(['All', 'Central', 'South', 'North'], case_sensitive=False))
-@click.option('--device', default=None, help='Specify device (e.g. cuda:0, cuda:1, cpu)')
+@click.option('--device', default=None, help='Specify device (e.g. cuda, cuda:1, cpu)')
 def train(config: str, region: str, device: Optional[str]) -> None:
     """Fine-tune PhoWhisper model"""
     try:
@@ -141,9 +141,9 @@ def train(config: str, region: str, device: Optional[str]) -> None:
                     device_id = int(selected_device.split(':')[1])
                     if device_id >= torch.cuda.device_count():
                         logger.warning(f"CUDA device {device_id} not available. Using device 0.")
-                        selected_device = 'cuda:0'
+                        selected_device = 'cuda'
                 except (IndexError, ValueError):
-                    selected_device = 'cuda:0'
+                    selected_device = 'cuda'
                     
         logger.info(f"Selected device: {selected_device}")
         if selected_device.startswith('cuda'):

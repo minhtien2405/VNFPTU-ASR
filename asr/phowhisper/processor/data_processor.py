@@ -82,7 +82,7 @@ class DataProcessor:
         
         # Normalize device string
         if device == "auto":
-            self.device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+            self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         else:
             self.device = device
             
@@ -96,10 +96,10 @@ class DataProcessor:
                     device_id = int(self.device.split(':')[1])
                     if device_id >= torch.cuda.device_count():
                         logger.warning(f"CUDA device {device_id} not available. Using device 0.")
-                        self.device = 'cuda:0'
+                        self.device = 'cuda'
                     logger.info(f"Using GPU: {torch.cuda.get_device_name(device_id)}")
                 except (IndexError, ValueError):
-                    self.device = 'cuda:0'
+                    self.device = 'cuda'
         
         self.region = config.region.lower()
         self.max_label_length = 448

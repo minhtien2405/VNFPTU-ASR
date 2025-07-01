@@ -7,7 +7,7 @@ model:
     bnb_4bit_compute_dtype: "float16"
     bnb_4bit_use_double_quant: true
     bnb_4bit_quant_type: "nf4"
-  device: "auto" #"auto", "cpu", "cuda:0", "cuda:1", etc.
+  device: "auto" #"auto", "cpu", "cuda", "cuda:1", etc.
 
 lora:
   r: 32
