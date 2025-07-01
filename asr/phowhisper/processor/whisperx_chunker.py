@@ -24,6 +24,11 @@ class WhisperXChunker:
         self._model = None
         self._align_model = None
         self._align_metadata = None
+        
+        # Enable TF32 for better performance (addresses the warning)
+        if device.startswith('cuda'):
+            torch.backends.cuda.matmul.allow_tf32 = True
+            torch.backends.cudnn.allow_tf32 = True
 
     def _cleanup_gpu(self):
         """Clean up GPU memory"""
@@ -69,6 +74,10 @@ class WhisperXChunker:
         try:
             if not isinstance(audio_array, np.ndarray):
                 raise ValueError("Input must be a numpy array")
+            
+            # Ensure consistent data type (convert to float32 to avoid DoubleTensor issues)
+            if audio_array.dtype != np.float32:
+                audio_array = audio_array.astype(np.float32)
             
             # Handle NaN and Inf values
             if np.isnan(audio_array).any() or np.isinf(audio_array).any():
