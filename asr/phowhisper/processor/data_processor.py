@@ -84,7 +84,7 @@ class DataProcessor:
         
         try:
             self.chunker = WhisperXChunker(
-                model_path=Path("large-v2"),
+                model_path=Path("openai/whisper-large-v2"),
                 device=device,
                 language=config.model.language,
                 compute_type="float16" if device == "cuda" else "float32"
