@@ -14,7 +14,7 @@ class WhisperXChunkerError(Exception):
 
 class WhisperXChunker:
     def __init__(self, model_path: Union[str, Path], device: str, language: str, 
-                 batch_size: int = 16, compute_type: str = "float16"):
+                batch_size: int = 16, compute_type: str = "float16"):
         self.model_path = str(Path(model_path).resolve())
         self.device = device
         self.language = language.lower()
@@ -53,8 +53,7 @@ class WhisperXChunker:
                 self._model = whisperx.load_model(
                     self.model_path,
                     device=self.device,
-                    compute_type=self.compute_type,
-                    download_root=str(Path("./models/whisperx").resolve())
+                    compute_type=self.compute_type
                 )
                 logger.info("Model loaded successfully")
             except Exception as e:
@@ -98,9 +97,9 @@ class WhisperXChunker:
     def chunk(self, audio_array: np.ndarray, sampling_rate: int) -> List[Dict[str, Union[np.ndarray, int]]]:
         """Chunk audio array into segments with improved alignment"""
         try:
-            # Enable TF32 
-            torch.backends.cuda.matmul.allow_tf32 = True
-            torch.backends.cudnn.allow_tf32 = True
+            # # Enable TF32 
+            # torch.backends.cuda.matmul.allow_tf32 = True
+            # torch.backends.cudnn.allow_tf32 = True
             
             audio_array = self._preprocess_audio(audio_array)
             
