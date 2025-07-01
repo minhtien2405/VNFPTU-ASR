@@ -6,6 +6,7 @@ from transformers import WhisperProcessor
 from functools import partial
 import wandb
 from pathlib import Path
+import torch
 
 from processor.whisperx_chunker import WhisperXChunker, WhisperXChunkerError
 
