@@ -13,9 +13,9 @@ class WhisperXChunkerError(Exception):
     pass
 
 class WhisperXChunker:
-    def __init__(self, model_path: Union[str, Path], device: str, language: str, 
+    def __init__(self, model_path: str, device: str, language: str, 
                 batch_size: int = 16, compute_type: str = "float16"):
-        self.model_path = str(Path(model_path).resolve())
+        self.model_path = model_path
         self.device = device
         self.language = language.lower()
         self.batch_size = batch_size
