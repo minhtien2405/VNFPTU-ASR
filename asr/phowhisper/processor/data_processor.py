@@ -29,6 +29,10 @@ def prepare_dataset(
         audio_array = audio["array"]
         sampling_rate = audio["sampling_rate"]
 
+        # Ensure consistent data type (convert to float32 to avoid DoubleTensor issues)
+        if audio_array.dtype != np.float32:
+            audio_array = audio_array.astype(np.float32)
+
         # Normalize if needed
         if np.abs(audio_array).max() > 0:
             audio_array = audio_array / np.abs(audio_array).max()
@@ -140,6 +144,7 @@ class DataProcessor:
         try:
             logger.info("Processing dataset in single-processing mode")
             
+            # Enable TF32 for better performance (addresses the warning)
             torch.backends.cuda.matmul.allow_tf32 = True
             torch.backends.cudnn.allow_tf32 = True
             
