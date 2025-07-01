@@ -37,9 +37,13 @@ def prepare_dataset(
 
         # Decide chunking based on audio length
         audio_length = len(audio_array) / sampling_rate
+        logger.debug(f"Processing audio of length {audio_length:.2f} seconds")
+        
         chunks = (chunker.chunk(audio_array, sampling_rate) 
                  if audio_length > chunk_threshold 
                  else [{"array": audio_array, "sampling_rate": sampling_rate}])
+        
+        logger.debug(f"Number of chunks created: {len(chunks)}")
 
         # Process each chunk
         batch["input_features"] = [
@@ -79,9 +83,10 @@ class DataProcessor:
         
         try:
             self.chunker = WhisperXChunker(
-                model_path=Path("./converted_phowhisper"),
+                model_path=Path("large-v2"),
                 device=device,
                 language=config.model.language,
+                compute_type="float16" if device == "cuda" else "float32"
             )
             logger.info(f"DataProcessor initialized for region '{self.region}'")
             
