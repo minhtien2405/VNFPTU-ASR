@@ -121,7 +121,7 @@ def train(config: str, region: str) -> None:
             task=config_obj.model.task
         )
         
-        data_processor = DataProcessor(config_obj, processor, device=config_obj.device)
+        data_processor = DataProcessor(config_obj, processor, device=config_obj.model.device)
         
         train_dataset, valid_dataset = data_processor.load_dataset()
         train_dataset = data_processor.process(train_dataset)
