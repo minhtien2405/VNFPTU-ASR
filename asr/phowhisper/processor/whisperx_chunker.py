@@ -16,23 +16,48 @@ class WhisperXChunker:
     def __init__(self, model_path: str, device: str, language: str, 
                 batch_size: int = 16, compute_type: str = "float16"):
         self.model_path = model_path
-        self.device = device
+        self.original_device = device
+        
+        # Normalize device string
+        if device == "auto":
+            self.device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+        else:
+            self.device = device
+            
+        # Validate device
+        if self.device.startswith('cuda'):
+            if not torch.cuda.is_available():
+                logger.warning("CUDA requested but not available. Falling back to CPU.")
+                self.device = 'cpu'
+            else:
+                try:
+                    device_id = int(self.device.split(':')[1])
+                    if device_id >= torch.cuda.device_count():
+                        logger.warning(f"CUDA device {device_id} not available. Using device 0.")
+                        self.device = 'cuda:0'
+                    logger.info(f"Using GPU: {torch.cuda.get_device_name(device_id)}")
+                except (IndexError, ValueError):
+                    self.device = 'cuda:0'
+        
         self.language = language.lower()
         self.batch_size = batch_size
-        self.compute_type = compute_type
+        self.compute_type = "float16" if self.device.startswith('cuda') else "float32"
         self._model = None
         self._align_model = None
         self._align_metadata = None
-        self._validate_init_params()
 
     def _validate_init_params(self) -> None:
-        if not Path(self.model_path).exists():
-            raise WhisperXChunkerError(f"Model path does not exist: {self.model_path}")
-        if self.device not in ["cpu", "cuda"]:
+        if not self.device.startswith(('cuda', 'cpu')):
             raise WhisperXChunkerError(f"Invalid device: {self.device}")
-        if self.device == "cuda" and not torch.cuda.is_available():
-            logger.warning("CUDA requested but not available. Falling back to CPU.")
-            self.device = "cpu"
+            
+        if self.device.startswith('cuda'):
+            # Validate CUDA device ID
+            try:
+                device_id = int(self.device.split(':')[1])
+                if device_id >= torch.cuda.device_count():
+                    raise WhisperXChunkerError(f"CUDA device {device_id} not available")
+            except (IndexError, ValueError):
+                raise WhisperXChunkerError(f"Invalid CUDA device format: {self.device}")
 
     def _cleanup_gpu(self):
         """Clean up GPU memory"""

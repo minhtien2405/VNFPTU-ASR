@@ -78,18 +78,39 @@ class DataProcessor:
     def __init__(self, config: object, processor: WhisperProcessor, device: str):
         self.config = config
         self.processor = processor
-        self.device = device
+        
+        # Normalize device string
+        if device == "auto":
+            self.device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+        else:
+            self.device = device
+            
+        # Validate device
+        if self.device.startswith('cuda'):
+            if not torch.cuda.is_available():
+                logger.warning("CUDA requested but not available. Falling back to CPU.")
+                self.device = 'cpu'
+            else:
+                try:
+                    device_id = int(self.device.split(':')[1])
+                    if device_id >= torch.cuda.device_count():
+                        logger.warning(f"CUDA device {device_id} not available. Using device 0.")
+                        self.device = 'cuda:0'
+                    logger.info(f"Using GPU: {torch.cuda.get_device_name(device_id)}")
+                except (IndexError, ValueError):
+                    self.device = 'cuda:0'
+        
         self.region = config.region.lower()
-        self.max_label_length = 448  # Add as class attribute
+        self.max_label_length = 448
         
         try:
             self.chunker = WhisperXChunker(
                 model_path="large-v2",
-                device=device,
+                device=self.device,
                 language=config.model.language,
-                compute_type="float16" if device == "cuda" else "float32"
+                compute_type="float16" if self.device.startswith('cuda') else "float32"
             )
-            logger.info(f"DataProcessor initialized for region '{self.region}'")
+            logger.info(f"DataProcessor initialized for region '{self.region}' on device '{self.device}'")
             
         except Exception as e:
             raise DataProcessorError(f"Failed to initialize DataProcessor: {str(e)}")
@@ -116,7 +137,6 @@ class DataProcessor:
                 train_dataset = self._filter_by_region(train_dataset)
                 valid_dataset = self._filter_by_region(valid_dataset)
 
-            # Log dataset sizes
             if wandb.run:
                 wandb.log({
                     "dataset_size_train": len(train_dataset),
@@ -146,7 +166,7 @@ class DataProcessor:
                 chunker=self.chunker,
                 region=self.region,
                 chunk_threshold=30.0,
-                max_label_length=self.max_label_length  # Pass max length
+                max_label_length=self.max_label_length
             )
 
             processed = dataset.map(

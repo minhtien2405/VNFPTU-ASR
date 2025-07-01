@@ -28,7 +28,11 @@ def setup_cuda() -> None:
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
         os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
-        logger.info("CUDA setup completed")
+        device_count = torch.cuda.device_count()
+        devices = [f"cuda:{i} - {torch.cuda.get_device_name(i)}" for i in range(device_count)]
+        logger.info(f"Found {device_count} CUDA devices: {', '.join(devices)}")
+    else:
+        logger.info("No CUDA devices available")
 
 def setup_cache() -> None:
     """Setup cache directories"""
@@ -108,7 +112,8 @@ def cli():
 @cli.command()
 @click.option('--config', type=click.Path(exists=True), default='phowhisper/configs/config.yaml')
 @click.option('--region', type=click.Choice(['All', 'Central', 'South', 'North'], case_sensitive=False))
-def train(config: str, region: str) -> None:
+@click.option('--device', default=None, help='Specify device (e.g. cuda:0, cuda:1, cpu)')
+def train(config: str, region: str, device: Optional[str]) -> None:
     """Fine-tune PhoWhisper model"""
     try:
         setup_environment()
@@ -116,14 +121,43 @@ def train(config: str, region: str) -> None:
         config_obj = Config(config, region)
         setup_wandb(config_obj)
         
+        # Device selection priority: CLI arg > config > auto-detect
+        if device is not None:
+            selected_device = device
+        elif config_obj.model.device not in [None, "auto"]:
+            selected_device = config_obj.model.device
+        elif torch.cuda.is_available():
+            selected_device = f'cuda:{torch.cuda.current_device()}'
+        else:
+            selected_device = 'cpu'
+            
+        # Validate selected device
+        if selected_device.startswith('cuda'):
+            if not torch.cuda.is_available():
+                logger.warning("CUDA requested but not available. Falling back to CPU.")
+                selected_device = 'cpu'
+            else:
+                try:
+                    device_id = int(selected_device.split(':')[1])
+                    if device_id >= torch.cuda.device_count():
+                        logger.warning(f"CUDA device {device_id} not available. Using device 0.")
+                        selected_device = 'cuda:0'
+                except (IndexError, ValueError):
+                    selected_device = 'cuda:0'
+                    
+        logger.info(f"Selected device: {selected_device}")
+        if selected_device.startswith('cuda'):
+            device_id = int(selected_device.split(':')[1])
+            logger.info(f"GPU: {torch.cuda.get_device_name(device_id)}")
+            logger.info(f"Memory: {torch.cuda.get_device_properties(device_id).total_memory/1024**3:.1f}GB")
+        
         processor = WhisperProcessor.from_pretrained(
             config_obj.model.model_id,
             language=config_obj.model.language,
             task=config_obj.model.task
         )
         
-        device = config_obj.model.device if config_obj.model.device else 'cuda:1' if torch.cuda.is_available() else 'cpu'
-        data_processor = DataProcessor(config_obj, processor, device)
+        data_processor = DataProcessor(config_obj, processor, device=selected_device)
         
         train_dataset, valid_dataset = data_processor.load_dataset()
         train_dataset = data_processor.process(train_dataset)
@@ -176,17 +210,4 @@ def infer(config: str, model_path: str, audio_path: str, region: str) -> None:
         inference = Inference(config_obj, model_path)
         results = inference.infer(audio_path)
         
-        click.echo("\n🔍 Transcription Result")
-        for seg in results:
-            click.echo(
-                f"⏰ [{seg['start_time']:.2f}s - {seg['end_time']:.2f}s]: "
-                f"💬 {seg['text']} "
-                f"(⚡ Latency: {seg['latency']:.2f}s)"
-            )
-            
-    except Exception as e:
-        logger.error(f"Inference failed: {e}")
-        raise click.ClickException(str(e))
-
-if __name__ == '__main__':
-    cli()
+       
