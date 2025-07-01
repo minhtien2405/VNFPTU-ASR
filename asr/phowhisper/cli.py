@@ -28,11 +28,9 @@ def setup_cuda() -> None:
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
         os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
-        device_count = torch.cuda.device_count()
-        devices = [f"cuda:{i} - {torch.cuda.get_device_name(i)}" for i in range(device_count)]
-        logger.info(f"Found {device_count} CUDA devices: {', '.join(devices)}")
+        logger.info("CUDA setup completed")
     else:
-        logger.info("No CUDA devices available")
+        logger.warning("CUDA is not available, using CPU instead")
 
 def setup_cache() -> None:
     """Setup cache directories"""
@@ -98,7 +96,7 @@ def setup_logging(config_path: str, region: str) -> None:
             datefmt="%Y-%m-%d %H:%M:%S",
         )
         
-        device = config.model.device if config.model.device else 'cuda:1' if torch.cuda.is_available() else 'cpu'
+        device = config.model.device if config.model.device else 'cuda' if torch.cuda.is_available() else 'cpu'
         logger.info(f"Logging setup completed for region {region} on device {device}")
         
     except Exception as e:
@@ -112,8 +110,7 @@ def cli():
 @cli.command()
 @click.option('--config', type=click.Path(exists=True), default='phowhisper/configs/config.yaml')
 @click.option('--region', type=click.Choice(['All', 'Central', 'South', 'North'], case_sensitive=False))
-@click.option('--device', default=None, help='Specify device (e.g. cuda, cuda:1, cpu)')
-def train(config: str, region: str, device: Optional[str]) -> None:
+def train(config: str, region: str) -> None:
     """Fine-tune PhoWhisper model"""
     try:
         setup_environment()
@@ -121,43 +118,20 @@ def train(config: str, region: str, device: Optional[str]) -> None:
         config_obj = Config(config, region)
         setup_wandb(config_obj)
         
-        # Device selection priority: CLI arg > config > auto-detect
-        if device is not None:
-            selected_device = device
-        elif config_obj.model.device not in [None, "auto"]:
-            selected_device = config_obj.model.device
-        elif torch.cuda.is_available():
-            selected_device = f'cuda:{torch.cuda.current_device()}'
+        if torch.cuda.is_available():
+            device = config_obj.model.device if config_obj.model.device else "cuda"
+            logger.info(f"Using GPU device: {device} - {torch.cuda.get_device_name(device.split(':')[1])}")
         else:
-            selected_device = 'cpu'
+            device = 'cpu'
+            logger.info("Using CPU device")
             
-        # Validate selected device
-        if selected_device.startswith('cuda'):
-            if not torch.cuda.is_available():
-                logger.warning("CUDA requested but not available. Falling back to CPU.")
-                selected_device = 'cpu'
-            else:
-                try:
-                    device_id = int(selected_device.split(':')[1])
-                    if device_id >= torch.cuda.device_count():
-                        logger.warning(f"CUDA device {device_id} not available. Using device 0.")
-                        selected_device = 'cuda'
-                except (IndexError, ValueError):
-                    selected_device = 'cuda'
-                    
-        logger.info(f"Selected device: {selected_device}")
-        if selected_device.startswith('cuda'):
-            device_id = int(selected_device.split(':')[1])
-            logger.info(f"GPU: {torch.cuda.get_device_name(device_id)}")
-            logger.info(f"Memory: {torch.cuda.get_device_properties(device_id).total_memory/1024**3:.1f}GB")
-        
         processor = WhisperProcessor.from_pretrained(
             config_obj.model.model_id,
             language=config_obj.model.language,
             task=config_obj.model.task
         )
         
-        data_processor = DataProcessor(config_obj, processor, device=selected_device)
+        data_processor = DataProcessor(config_obj, processor, device=device)
         
         train_dataset, valid_dataset = data_processor.load_dataset()
         train_dataset = data_processor.process(train_dataset)

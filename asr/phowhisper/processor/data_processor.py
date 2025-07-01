@@ -80,27 +80,11 @@ class DataProcessor:
         self.config = config
         self.processor = processor
         
-        # Normalize device string
         if device == "auto":
             self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         else:
             self.device = device
             
-        # Validate device
-        if self.device.startswith('cuda'):
-            if not torch.cuda.is_available():
-                logger.warning("CUDA requested but not available. Falling back to CPU.")
-                self.device = 'cpu'
-            else:
-                try:
-                    device_id = int(self.device.split(':')[1])
-                    if device_id >= torch.cuda.device_count():
-                        logger.warning(f"CUDA device {device_id} not available. Using device 0.")
-                        self.device = 'cuda'
-                    logger.info(f"Using GPU: {torch.cuda.get_device_name(device_id)}")
-                except (IndexError, ValueError):
-                    self.device = 'cuda'
-        
         self.region = config.region.lower()
         self.max_label_length = 448
         

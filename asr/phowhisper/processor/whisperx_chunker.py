@@ -24,21 +24,6 @@ class WhisperXChunker:
         else:
             self.device = device
             
-        # Validate device
-        if self.device.startswith('cuda'):
-            if not torch.cuda.is_available():
-                logger.warning("CUDA requested but not available. Falling back to CPU.")
-                self.device = 'cpu'
-            else:
-                try:
-                    device_id = int(self.device.split(':')[1])
-                    if device_id >= torch.cuda.device_count():
-                        logger.warning(f"CUDA device {device_id} not available. Using device 0.")
-                        self.device = 'cuda'
-                    logger.info(f"Using GPU: {torch.cuda.get_device_name(device_id)}")
-                except (IndexError, ValueError):
-                    self.device = 'cuda'
-        
         self.language = language.lower()
         self.batch_size = batch_size
         self.compute_type = "float16" if self.device.startswith('cuda') else "float32"
@@ -50,15 +35,6 @@ class WhisperXChunker:
         if not self.device.startswith(('cuda', 'cpu')):
             raise WhisperXChunkerError(f"Invalid device: {self.device}")
             
-        if self.device.startswith('cuda'):
-            # Validate CUDA device ID
-            try:
-                device_id = int(self.device.split(':')[1])
-                if device_id >= torch.cuda.device_count():
-                    raise WhisperXChunkerError(f"CUDA device {device_id} not available")
-            except (IndexError, ValueError):
-                raise WhisperXChunkerError(f"Invalid CUDA device format: {self.device}")
-
     def _cleanup_gpu(self):
         """Clean up GPU memory"""
         gc.collect()
