@@ -26,7 +26,7 @@ def prepare_dataset(
 ) -> Dict:
     try:
         audio = batch["audio"]
-        audio_array = audio["array"].astype(np.float32)  # Ensure float32
+        audio_array = audio["array"]
         sampling_rate = audio["sampling_rate"]
 
         # Normalize if needed
@@ -79,12 +79,7 @@ class DataProcessor:
     def __init__(self, config: object, processor: WhisperProcessor, device: str):
         self.config = config
         self.processor = processor
-        
-        if device == "auto":
-            self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        else:
-            self.device = device
-            
+        self.device = device if device else "cpu"
         self.region = config.region.lower()
         self.max_label_length = 448
         

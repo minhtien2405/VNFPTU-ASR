@@ -16,13 +16,7 @@ class WhisperXChunker:
     def __init__(self, model_path: str, device: str, language: str, 
                 batch_size: int = 16, compute_type: str = "float16"):
         self.model_path = model_path
-        self.original_device = device
-        
-        # Normalize device string
-        if device == "auto":
-            self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        else:
-            self.device = device
+        self.device = device
             
         self.language = language.lower()
         self.batch_size = batch_size
@@ -31,10 +25,6 @@ class WhisperXChunker:
         self._align_model = None
         self._align_metadata = None
 
-    def _validate_init_params(self) -> None:
-        if not self.device.startswith(('cuda', 'cpu')):
-            raise WhisperXChunkerError(f"Invalid device: {self.device}")
-            
     def _cleanup_gpu(self):
         """Clean up GPU memory"""
         gc.collect()
@@ -79,9 +69,6 @@ class WhisperXChunker:
         try:
             if not isinstance(audio_array, np.ndarray):
                 raise ValueError("Input must be a numpy array")
-            
-            # Convert to float32
-            audio_array = audio_array.astype(np.float32)
             
             # Handle NaN and Inf values
             if np.isnan(audio_array).any() or np.isinf(audio_array).any():

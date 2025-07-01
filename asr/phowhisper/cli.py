@@ -96,9 +96,6 @@ def setup_logging(config_path: str, region: str) -> None:
             datefmt="%Y-%m-%d %H:%M:%S",
         )
         
-        device = config.model.device if config.model.device else 'cuda' if torch.cuda.is_available() else 'cpu'
-        logger.info(f"Logging setup completed for region {region} on device {device}")
-        
     except Exception as e:
         raise CLIError(f"Logging setup failed: {e}")
 
@@ -117,12 +114,6 @@ def train(config: str, region: str) -> None:
         setup_logging(config, region)
         config_obj = Config(config, region)
         setup_wandb(config_obj)
-        
-        if torch.cuda.is_available():
-            device = 'cuda'
-        else:
-            device = 'cpu'
-            logger.info("Using CPU device")
             
         processor = WhisperProcessor.from_pretrained(
             config_obj.model.model_id,
@@ -130,7 +121,7 @@ def train(config: str, region: str) -> None:
             task=config_obj.model.task
         )
         
-        data_processor = DataProcessor(config_obj, processor, device=device)
+        data_processor = DataProcessor(config_obj, processor, device=config_obj.device)
         
         train_dataset, valid_dataset = data_processor.load_dataset()
         train_dataset = data_processor.process(train_dataset)
