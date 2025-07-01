@@ -1,0 +1,46 @@
+# Chunkformer VIMD Training Requirements
+# ====================================
+
+# Core dependencies
+torch>=1.12.0
+torchaudio>=0.12.0
+numpy>=1.21.0
+pandas>=1.4.0
+
+# Dataset and preprocessing
+datasets>=2.0.0
+soundfile>=0.12.0
+librosa>=0.9.0
+
+# Training and evaluation
+wandb>=0.13.0
+tensorboard>=2.8.0
+evaluate>=0.4.0
+jiwer>=3.0.0
+
+# Configuration and utilities
+PyYAML>=6.0
+omegaconf>=2.2.0
+hydra-core>=1.2.0
+
+# Audio processing
+pydub>=0.25.0
+sox>=1.4.0
+
+# Text processing
+transformers>=4.20.0
+tokenizers>=0.13.0
+
+# WeNet dependencies (install separately)
+# Follow WeNet installation instructions:
+# https://github.com/wenet-e2e/wenet
+
+# Optional: For better performance
+# accelerate>=0.20.0
+# deepspeed>=0.9.0
+
+# Development dependencies (optional)
+# pytest>=7.0.0
+# black>=22.0.0
+# flake8>=4.0.0
+# pre-commit>=2.20.0
