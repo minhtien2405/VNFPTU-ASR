@@ -145,6 +145,9 @@ class DataProcessor:
         try:
             logger.info("Processing dataset in single-processing mode")
             
+            torch.backends.cuda.matmul.allow_tf32 = True
+            torch.backends.cudnn.allow_tf32 = True
+            
             process_fn = partial(
                 prepare_dataset,
                 processor=self.processor,
