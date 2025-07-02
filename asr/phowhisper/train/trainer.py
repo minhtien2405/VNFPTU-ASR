@@ -85,16 +85,16 @@ class Trainer:
         )
         model.config.suppress_tokens = []
 
-        if torch.cuda.device_count() > 1:
-            device_map = {
-                "model.encoder": 0,
-                "model.decoder": 1,
-                "proj_out": 1
-            }
-            model = dispatch_model(model, device_map=device_map)
-            model.model_parallel = True
-            model.is_parallelizable = True
-            logger.info("Multi-GPU setup configured")
+        # if torch.cuda.device_count() > 1:
+        #     device_map = {
+        #         "model.encoder": 0,
+        #         "model.decoder": 1,
+        #         "proj_out": 1
+        #     }
+        #     model = dispatch_model(model, device_map=device_map)
+        #     model.model_parallel = True
+        #     model.is_parallelizable = True
+        #     logger.info("Multi-GPU setup configured")
 
         peft_model = peft.get_peft_model(
             peft.prepare_model_for_kbit_training(
