@@ -93,7 +93,7 @@ class Trainer:
                 "proj_out": 1
             }
 
-            model = dispatch_model(model, device_map=device_map)
+            model = accelerate.dispatch_model(model, device_map=device_map)
             model.model_parallel = True
             model.is_parallelizable = True
             logger.info("Setting up model for multi-GPU training")
