@@ -65,6 +65,7 @@ class Trainer:
 
         wandb.init(project=config.wandb.project, name=config.wandb.run_name, config=config.config)
         self.model = self._load_model()
+        logger.info(f"Model loaded: {self.config.model.model_id} on {self.device}")
         self._log_model_stats()
         self.trainer = self._setup_trainer()
 
