@@ -61,7 +61,7 @@ class Trainer:
         self.processor = processor
         self.train_dataset = train_dataset
         self.valid_dataset = valid_dataset
-        self.device = "cuda:1" if torch.cuda.is_available() else "cpu"
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
         wandb.init(project=config.wandb.project, name=config.wandb.run_name, config=config.config)
         self.model = self._load_model()
