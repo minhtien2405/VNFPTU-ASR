@@ -76,7 +76,7 @@ class Trainer:
         model = WhisperForConditionalGeneration.from_pretrained(
             self.config.model.model_id,
             use_cache=False,
-            device_map=self.device,
+            # device_map=self.device,
             quantization_config=BitsAndBytesConfig(
                 load_in_4bit=self.config.model.quantization.load_in_4bit,
                 bnb_4bit_compute_dtype=getattr(torch, self.config.model.quantization.bnb_4bit_compute_dtype),
