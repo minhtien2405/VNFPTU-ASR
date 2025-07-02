@@ -104,6 +104,9 @@ class Trainer:
         #     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         #     model.to(device)
         #     logger.info("Setting up model for single-GPU training")
+        
+        model.to(self.device)
+        logger.info(f"Model moved to device: {self.device}")
 
         peft_model = peft.get_peft_model(
             peft.prepare_model_for_kbit_training(
