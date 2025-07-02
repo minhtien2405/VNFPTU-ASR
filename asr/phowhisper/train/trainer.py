@@ -70,10 +70,13 @@ class Trainer:
         self.trainer = self._setup_trainer()
 
     def _load_model(self):
+        torch.cuda.empty_cache()
+        torch.cuda.ipc_collect()
+        logger.info("Cleared GPU memory cache before model loading")
         model = WhisperForConditionalGeneration.from_pretrained(
             self.config.model.model_id,
             use_cache=False,
-            device_map="auto",
+            device_map=self.device,
             quantization_config=BitsAndBytesConfig(
                 load_in_4bit=self.config.model.quantization.load_in_4bit,
                 bnb_4bit_compute_dtype=getattr(torch, self.config.model.quantization.bnb_4bit_compute_dtype),
@@ -93,7 +96,6 @@ class Trainer:
                 "model.decoder": 1,
                 "proj_out": 1
             }
-
             model = accelerate.dispatch_model(model, device_map=device_map)
             model.model_parallel = True
             model.is_parallelizable = True
