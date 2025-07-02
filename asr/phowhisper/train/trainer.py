@@ -15,7 +15,7 @@ from transformers import (
 )
 import evaluate
 import wandb
-from accelerate import dispatch_model
+import accelerate
 import peft
 from thop import profile
 
@@ -34,6 +34,7 @@ class DataCollatorSpeechSeq2SeqWithPadding:
         ]
         batch = self.processor.feature_extractor.pad(input_features, return_tensors="pt")
 
+        # Flatten all label lists (always a list of tensors now)
         label_features = [
             {"input_ids": label}
             for feature in features
@@ -47,7 +48,7 @@ class DataCollatorSpeechSeq2SeqWithPadding:
 
         batch["labels"] = labels
         return batch
-
+    
 class WandbCallback(TrainerCallback):
     def on_evaluate(self, args, state, control, metrics=None, **kwargs):
         if metrics and "eval_wer" in metrics:
@@ -71,7 +72,7 @@ class Trainer:
         model = WhisperForConditionalGeneration.from_pretrained(
             self.config.model.model_id,
             use_cache=False,
-            device_map={"": torch.cuda.current_device()},  # Explicitly set device mapping
+            device_map="auto",
             quantization_config=BitsAndBytesConfig(
                 load_in_4bit=self.config.model.quantization.load_in_4bit,
                 bnb_4bit_compute_dtype=getattr(torch, self.config.model.quantization.bnb_4bit_compute_dtype),
@@ -85,22 +86,27 @@ class Trainer:
         )
         model.config.suppress_tokens = []
 
-        # if torch.cuda.device_count() > 1:
-        #     device_map = {
-        #         "model.encoder": 0,
-        #         "model.decoder": 1,
-        #         "proj_out": 1
-        #     }
-        #     model = dispatch_model(model, device_map=device_map)
-        #     model.model_parallel = True
-        #     model.is_parallelizable = True
-        #     logger.info("Multi-GPU setup configured")
+        if torch.cuda.device_count() > 1:
+            device_map = {
+                "model.encoder": 0,
+                "model.decoder": 1,
+                "proj_out": 1
+            }
+
+            model = dispatch_model(model, device_map=device_map)
+            model.model_parallel = True
+            model.is_parallelizable = True
+            logger.info("Setting up model for multi-GPU training")
+        else:
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            model.to(device)
+            logger.info("Setting up model for single-GPU training")
 
         peft_model = peft.get_peft_model(
             peft.prepare_model_for_kbit_training(
                 model,
                 use_gradient_checkpointing=True,
-                gradient_checkpointing_kwargs={"use_reentrant": True},
+                gradient_checkpointing_kwargs={"use_reentrant": False},
             ),
             peft.LoraConfig(
                 r=self.config.lora.r,
@@ -119,30 +125,38 @@ class Trainer:
         return peft_model
 
     def _log_model_stats(self):
+        """Log model statistics to wandb"""
         try:
+            # Get parameter counts
             total_params = sum(p.numel() for p in self.model.parameters())
             trainable_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
-
+            
+            # Log basic stats without FLOPs calculation
             stats = {
                 "total_params": total_params,
                 "trainable_params": trainable_params,
                 "trainable_percent": (trainable_params / total_params) * 100,
             }
-
+            
             wandb.log(stats)
             logger.info(
                 f"Model stats - Total: {total_params:,}, "
                 f"Trainable: {trainable_params:,} ({stats['trainable_percent']:.2f}%)"
             )
 
+            # Skip FLOPs calculation for now as it's causing issues
+            
         except Exception as e:
             logger.warning(f"Failed to calculate model stats: {str(e)}")
+            logger.warning("Continuing training without model stats")
 
     def _setup_trainer(self):
+        # Format output directory with region
         train_output_dir = self.config.training.train_output_dir.format(region=self.config.region.lower())
         eval_output_dir = self.config.training.eval_output_dir.format(region=self.config.region.lower())
         hub_model_id = self.config.training.hub_model_id.format(region=self.config.region.lower())
 
+        # Ensure directories exist
         os.makedirs(train_output_dir, exist_ok=True)
         os.makedirs(eval_output_dir, exist_ok=True)
 
@@ -182,7 +196,7 @@ class Trainer:
         def compute_metrics(pred):
             pred_ids = pred.predictions
             label_ids = pred.label_ids
-
+            
             label_ids[label_ids == -100] = self.processor.tokenizer.pad_token_id
 
             pred_str = self.processor.tokenizer.batch_decode(pred_ids, skip_special_tokens=True)
@@ -194,7 +208,7 @@ class Trainer:
             except Exception as e:
                 logger.error(f"WER computation failed: {e}")
                 wer = float('inf')
-
+                
             return {"wer": wer}
 
         trainer = Seq2SeqTrainer(
@@ -205,14 +219,14 @@ class Trainer:
             data_collator=data_collator,
             compute_metrics=compute_metrics,
             callbacks=[
-                WandbCallback(),
+                WandbCallback(), 
                 EarlyStoppingCallback(
                     early_stopping_patience=4,
                     early_stopping_threshold=0.0
                 )
             ],
         )
-
+        
         return trainer
 
     def train(self):
@@ -222,13 +236,14 @@ class Trainer:
         if resume:
             logger.info(f"Resuming training from checkpoint: {checkpoint_path}")
         self.trainer.train(resume_from_checkpoint=resume)
+        # self.trainer.train(resume_from_checkpoint=True if os.path.exists(self.config.training.output_dir) else None)
         logger.info("Training completed")
 
         try:
             torch.cuda.empty_cache()
             torch.cuda.ipc_collect()
             logger.info("Starting evaluation...")
-
+            
             eval_results = self.trainer.evaluate()
             logger.info(f"Final evaluation WER: {eval_results['eval_wer']}")
             eval_path = os.path.join(self.config.training.eval_output_dir, "eval_results.json")
