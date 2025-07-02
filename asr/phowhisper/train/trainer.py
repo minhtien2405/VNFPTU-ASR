@@ -61,7 +61,7 @@ class Trainer:
         self.processor = processor
         self.train_dataset = train_dataset
         self.valid_dataset = valid_dataset
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.device = "cuda:1" if torch.cuda.is_available() else "cpu"
 
         wandb.init(project=config.wandb.project, name=config.wandb.run_name, config=config.config)
         self.model = self._load_model()
@@ -90,20 +90,20 @@ class Trainer:
         )
         model.config.suppress_tokens = []
 
-        if torch.cuda.device_count() > 1:
-            device_map = {
-                "model.encoder": 0,
-                "model.decoder": 1,
-                "proj_out": 1
-            }
-            model = accelerate.dispatch_model(model, device_map=device_map)
-            model.model_parallel = True
-            model.is_parallelizable = True
-            logger.info("Setting up model for multi-GPU training")
-        else:
-            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-            model.to(device)
-            logger.info("Setting up model for single-GPU training")
+        # if torch.cuda.device_count() > 1:
+        #     device_map = {
+        #         "model.encoder": 0,
+        #         "model.decoder": 1,
+        #         "proj_out": 1
+        #     }
+        #     model = accelerate.dispatch_model(model, device_map=device_map)
+        #     model.model_parallel = True
+        #     model.is_parallelizable = True
+        #     logger.info("Setting up model for multi-GPU training")
+        # else:
+        #     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        #     model.to(device)
+        #     logger.info("Setting up model for single-GPU training")
 
         peft_model = peft.get_peft_model(
             peft.prepare_model_for_kbit_training(
