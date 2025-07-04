@@ -19,7 +19,6 @@ from huggingface_hub import login
 import numpy as np
 import wandb
 
-# Configuration class for model and training parameters
 @dataclass
 class TrainingConfig:
 	model_id: str = "nguyenvulebinh/wav2vec2-base-vietnamese-250h"
@@ -41,11 +40,10 @@ class TrainingConfig:
 	project_name: str = "Wav2Vec2_Central_ViMD_FPTU"
 	run_name: str = f"wav2vec2_finetune_central_vi_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
-# Set up logging
 def setup_logging(config: TrainingConfig) -> logging.Logger:
 	os.makedirs(config.log_dir, exist_ok=True)
 	logging.basicConfig(
-		filename=os.path.join(config.log_dir, "wav2vec_base_vi_v0.log"),
+		filename=os.path.join(config.log_dir, "wav2vec_base_central_vi_250h_v0.log"),
 		level=logging.INFO,
 		format="%(asctime)s - %(levelname)s - %(message)s",
 		datefmt="%Y-%m-%d %H:%M:%S",
@@ -53,7 +51,6 @@ def setup_logging(config: TrainingConfig) -> logging.Logger:
 	)
 	return logging.getLogger(__name__)
 
-# Data collator for CTC
 @dataclass
 class DataCollatorCTCWithPadding:
 	processor: Wav2Vec2Processor
@@ -70,7 +67,6 @@ class DataCollatorCTCWithPadding:
 		batch["labels"] = labels
 		return batch
 
-# Wandb callback for logging metrics
 class WandbCallback(TrainerCallback):
 	def on_evaluate(self, args, state, control, metrics, **kwargs):
 		if "eval_wer" in metrics:
@@ -117,7 +113,6 @@ def setup_training_components(config: TrainingConfig, logger: logging.Logger):
 			pad_token_id=processor.tokenizer.pad_token_id,
 		).to(device)
 		
-		# Freeze feature extractor layers
 		for param in model.wav2vec2.feature_extractor.parameters():
 			param.requires_grad = False
 		logger.info("Froze feature extractor layers for fine-tuning.")
@@ -138,29 +133,24 @@ def setup_training_components(config: TrainingConfig, logger: logging.Logger):
 		raise
 
 def main():
-	# Initialize configuration
 	config = TrainingConfig()
 	logger = setup_logging(config)
 	
 	try:
-		# Environment setup
 		load_dotenv("./configs/.env")
 		
-		# Login to Hugging Face
 		hf_token = os.getenv("HF_TOKEN")
 		if not hf_token:
 			raise ValueError("HF_TOKEN not found in .env file")
 		login(token=hf_token)
 		logger.info("Logged in to Hugging Face Hub")
 		
-		# Login to Wandb
 		wandb_api_key = os.getenv("WANDB_API_KEY")
 		if not wandb_api_key:
 			raise ValueError("WANDB_API_KEY not found in .env file")
 		wandb.login(key=wandb_api_key)
 		logger.info("Logged in to Weights & Biases")
 		
-		# Initialize Wandb
 		wandb.init(
 			project=config.project_name,
 			name=config.run_name,
@@ -170,10 +160,8 @@ def main():
 		os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 		torch.cuda.empty_cache()
 		
-		# Load and prepare data
 		train_dataset, valid_dataset = load_and_prepare_data(config, logger)
 		
-		# Process datasets
 		processor, model, metric, compute_metrics = setup_training_components(config, logger)
 		train_dataset = train_dataset.map(
 			lambda batch: prepare_dataset(batch, processor),
@@ -186,7 +174,6 @@ def main():
 			num_proc=4
 		)
 		
-		# Set up training arguments
 		training_args = TrainingArguments(
 			output_dir=config.output_dir,
 			per_device_train_batch_size=config.per_device_train_batch_size,
@@ -198,7 +185,7 @@ def main():
 			fp16=config.fp16,
 			eval_strategy="steps",
 			optim="adamw_torch",
-			per_device_eval_batch_size=config.per_device_trainЭдүк_batch_size,
+			per_device_eval_batch_size=config.per_device_train_batch_size,
 			save_steps=config.save_steps,
 			eval_steps=config.eval_steps,
 			logging_steps=config.logging_steps,
@@ -210,7 +197,6 @@ def main():
 			report_to=["wandb"],
 		)
 		
-		# Initialize trainer
 		trainer = Trainer(
 			model=model,
 			args=training_args,
@@ -221,12 +207,10 @@ def main():
 			callbacks=[WandbCallback()],
 		)
 		
-		# Start training
 		logger.info("Starting training...")
 		trainer.train()
 		logger.info("Training completed.")
 		
-		# Evaluate and save results
 		eval_results = trainer.evaluate()
 		wandb.log({"final_eval_wer": eval_results["eval_wer"]})
 		
@@ -235,24 +219,21 @@ def main():
 			for log in trainer.state.log_history
 			if "eval_wer" in log
 		]
-		wer_history_path = os.path.join(config.output_dir, "wer_history.json")
+		wer_history_path = os.path.join(config.output_dir, "wav2vec_base_central_vi_250h_wer_history.json")
 		with open(wer_history_path, "w") as f:
 			json.dump(wer_history, f)
 		
-		# Log artifact to Wandb
 		artifact = wandb.Artifact("wer_history", type="metrics")
 		artifact.add_file(wer_history_path)
 		wandb.log_artifact(artifact)
 		
-		# Save model and processor
 		os.makedirs(config.model_save_dir, exist_ok=True)
 		trainer.save_model(config.model_save_dir)
 		processor.save_pretrained(config.model_save_dir)
 		
-		# Push to Hugging Face Hub
 		trainer.push_to_hub(
-			commit_message="Fine-tuned Wav2Vec2 on ViMD Central region with layer freezing",
-			tags=["speech-recognition", "violetnamese", "central-vietnam"],
+			commit_message="Fine-tuned Wav2Vec2_250h on ViMD Central region with layer freezing",
+			tags=["speech-recognition", "vietnamese", "central-vietnam"],
 			dataset=config.dataset_id,
 			language="vi",
 			finetuned_from=config.model_id,
@@ -263,7 +244,6 @@ def main():
 		logger.info(f"Final evaluation results: {eval_results}")
 		logger.info("Model and processor saved and pushed to Hugging Face Hub.")
 		
-		# Finish Wandb run
 		wandb.finish()
 		
 	except Exception as e:
