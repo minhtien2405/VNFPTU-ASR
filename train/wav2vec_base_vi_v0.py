@@ -166,12 +166,12 @@ def main():
 		train_dataset = train_dataset.map(
 			lambda batch: prepare_dataset(batch, processor),
 			remove_columns=train_dataset.column_names,
-			num_proc=4
+			num_proc=2
 		)
 		valid_dataset = valid_dataset.map(
 			lambda batch: prepare_dataset(batch, processor),
 			remove_columns=valid_dataset.column_names,
-			num_proc=4
+			num_proc=2
 		)
 		
 		training_args = TrainingArguments(
