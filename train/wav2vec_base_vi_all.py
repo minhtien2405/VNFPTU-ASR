@@ -34,11 +34,11 @@ class TrainingConfig:
 	per_device_train_batch_size: int = 4
 	gradient_accumulation_steps: int = 8
 	learning_rate: float = 3e-4
-	warmup_steps: int = 20
-	num_train_epochs: int = 30
-	save_steps: int = 40
-	eval_steps: int = 40
-	logging_steps: int = 20
+	warmup_steps: int = 100
+	num_train_epochs: int = 50
+	save_steps: int = 100
+	eval_steps: int = 100
+	logging_steps: int = 50
 	save_total_limit: int = 3
 	fp16: bool = True
 	project_name: str = "Wav2Vec2_All_ViMD_FPTU"
@@ -288,7 +288,7 @@ def main():
 		)
 		
 		logger.info("Starting training...")
-		trainer.train(resume_from_checkpoint=True)
+		trainer.train()#resume_from_checkpoint=True)
 		logger.info("Training completed.")
 		
 		test_results = trainer.evaluate(eval_dataset=test_dataset)
