@@ -30,8 +30,9 @@ class TrainingConfig:
 	model_save_dir: str = "./models/wav2vec2-base-central-vi"
 	per_device_train_batch_size: int = 4
 	gradient_accumulation_steps: int = 8
-	learning_rate: float = 1e-5
+	learning_rate: float = 3e-4
 	warmup_steps: int = 20
+	num_train_epochs: int = 30
 	save_steps: int = 40
 	eval_steps: int = 40
 	logging_steps: int = 20
@@ -72,36 +73,73 @@ class WandbCallback(TrainerCallback):
 		if "eval_wer" in metrics:
 			wandb.log({"eval_wer": metrics["eval_wer"], "step": state.global_step})
 
+def validate_audio(sample, logger: logging.Logger) -> bool:
+	"""Validate audio sample for non-empty and valid format."""
+	try:
+		audio = sample["audio"]
+		if audio["array"] is None or len(audio["array"]) == 0:
+			logger.warning(f"Invalid audio sample: {sample.get('path', 'unknown')}")
+			return False
+		return True
+	except Exception as e:
+		logger.error(f"Error validating audio sample {sample.get('path', 'unknown')}: {str(e)}")
+		return False
+	
+def normalize_text(text: str) -> str:
+	"""Clean and normalize text labels."""
+	text = text.lower()  # Convert to lowercase
+	text = re.sub(r'[^\w\s]', '', text)  # Remove punctuation
+	text = re.sub(r'\s+', ' ', text).strip()  # Normalize whitespace
+	return text
 def load_and_prepare_data(config: TrainingConfig, logger: logging.Logger):
-	"""Load and preprocess dataset"""
+	"""Load and preprocess dataset with validation."""
 	try:
 		os.environ["HF_DATASETS_CACHE"] = config.cache_dir
 		
 		dataset = load_dataset(config.dataset_id, cache_dir=config.cache_dir)
 		
+		# Filter for Central region
 		train_dataset = dataset["train"].filter(lambda x: x["region"] == "Central")
 		valid_dataset = dataset["valid"].filter(lambda x: x["region"] == "Central")
+		test_dataset = dataset["test"].filter(lambda x: x["region"] == "Central")
 		
+		# Validate audio samples
+		train_dataset = train_dataset.filter(lambda x: validate_audio(x, logger))
+		valid_dataset = valid_dataset.filter(lambda x: validate_audio(x, logger))
+		test_dataset = test_dataset.filter(lambda x: validate_audio(x, logger))
+		
+		# Cast audio column to correct sampling rate
 		train_dataset = train_dataset.cast_column("audio", Audio(sampling_rate=16000))
 		valid_dataset = valid_dataset.cast_column("audio", Audio(sampling_rate=16000))
+		test_dataset = test_dataset.cast_column("audio", Audio(sampling_rate=16000))
 		
-		logger.info(f"Train dataset size: {len(train_dataset)}")
-		logger.info(f"Validation dataset size: {len(valid_dataset)}")
+		# Clean text labels
+		train_dataset = train_dataset.map(lambda x: {"text": normalize_text(x["text"])})
+		valid_dataset = valid_dataset.map(lambda x: {"text": normalize_text(x["text"])})
+		test_dataset = test_dataset.map(lambda x: {"text": normalize_text(x["text"])})
 		
-		return train_dataset, valid_dataset
+		logger.info(f"Train dataset size after validation: {len(train_dataset)}")
+		logger.info(f"Validation dataset size after validation: {len(valid_dataset)}")
+		logger.info(f"Test dataset size after validation: {len(test_dataset)}")
+		
+		return train_dataset, valid_dataset, test_dataset
 	except Exception as e:
 		logger.error(f"Error loading dataset: {str(e)}")
 		raise
 
-def prepare_dataset(batch, processor: Wav2Vec2Processor):
-	"""Prepare dataset for training"""
-	audio = batch["audio"]
-	batch["input_values"] = processor(audio["array"], sampling_rate=audio["sampling_rate"]).input_values[0]
-	batch["labels"] = processor.tokenizer(batch["text"]).input_ids
-	return batch
+def prepare_dataset(batch, processor: Wav2Vec2Processor, logger: logging.Logger):
+	"""Prepare dataset for training with error handling."""
+	try:
+		audio = batch["audio"]
+		batch["input_values"] = processor(audio["array"], sampling_rate=audio["sampling_rate"]).input_values[0]
+		batch["labels"] = processor.tokenizer(batch["text"]).input_ids
+		return batch
+	except Exception as e:
+		logger.error(f"Error processing sample: {str(e)}")
+		return None
 
 def setup_training_components(config: TrainingConfig, logger: logging.Logger):
-	"""Set up model, processor, and metrics"""
+	"""Set up model, processor, and metrics with layer freezing."""
 	try:
 		device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 		logger.info(f"Using device: {device}")
@@ -113,6 +151,7 @@ def setup_training_components(config: TrainingConfig, logger: logging.Logger):
 			pad_token_id=processor.tokenizer.pad_token_id,
 		).to(device)
 		
+		# Freeze feature extractor layers
 		for param in model.wav2vec2.feature_extractor.parameters():
 			param.requires_grad = False
 		logger.info("Froze feature extractor layers for fine-tuning.")
@@ -160,21 +199,27 @@ def main():
 		os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 		torch.cuda.empty_cache()
 		
-		train_dataset, valid_dataset = load_and_prepare_data(config, logger)
-		
 		processor, model, metric, compute_metrics = setup_training_components(config, logger)
+		logger.info("Starting dataset mapping...")
 		train_dataset = train_dataset.map(
-			lambda batch: prepare_dataset(batch, processor),
+			lambda batch: prepare_dataset(batch, processor, logger),
 			remove_columns=train_dataset.column_names,
-			num_proc=1,
+			num_proc=1,  
 			keep_in_memory=False,
-		)
+		).filter(lambda x: x is not None)
 		valid_dataset = valid_dataset.map(
-			lambda batch: prepare_dataset(batch, processor),
+			lambda batch: prepare_dataset(batch, processor, logger),
 			remove_columns=valid_dataset.column_names,
 			num_proc=1,
 			keep_in_memory=False,
-		)
+		).filter(lambda x: x is not None)
+		test_dataset = test_dataset.map(
+			lambda batch: prepare_dataset(batch, processor, logger),
+			remove_columns=test_dataset.column_names,
+			num_proc=1,
+			keep_in_memory=False,
+		).filter(lambda x: x is not None)
+		logger.info("Dataset mapping completed.")
 		
 		training_args = TrainingArguments(
 			output_dir=config.output_dir,
@@ -182,6 +227,7 @@ def main():
 			gradient_accumulation_steps=config.gradient_accumulation_steps,
 			learning_rate=config.learning_rate,
 			warmup_steps=config.warmup_steps,
+			num_train_epochs=config.num_train_epochs,  # Use specified number of epochs
 			save_total_limit=config.save_total_limit,
 			gradient_checkpointing=True,
 			fp16=config.fp16,
@@ -213,8 +259,9 @@ def main():
 		trainer.train()
 		logger.info("Training completed.")
 		
-		eval_results = trainer.evaluate()
-		wandb.log({"final_eval_wer": eval_results["eval_wer"]})
+		test_results = trainer.evaluate(eval_dataset=test_dataset)
+		wandb.log({"test_wer": test_results["eval_wer"]})
+		logger.info(f"Test evaluation results: {test_results}")
 		
 		wer_history = [
 			(log["step"], log["eval_wer"])
