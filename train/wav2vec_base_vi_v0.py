@@ -137,17 +137,17 @@ def load_and_prepare_data(config: TrainingConfig, logger: logging.Logger):
 		train_dataset = train_dataset.map(
 			lambda batch: {"text": [normalize_text(t) for t in batch["text"]]},
 			batched=True,
-			batch_size=1000
+			batch_size=32
 		)
 		valid_dataset = valid_dataset.map(
 			lambda batch: {"text": [normalize_text(t) for t in batch["text"]]},
 			batched=True,
-			batch_size=1000
+			batch_size=32
 		)
 		test_dataset = test_dataset.map(
 			lambda batch: {"text": [normalize_text(t) for t in batch["text"]]},
 			batched=True,
-			batch_size=1000
+			batch_size=32
 		)
 		
 		logger.info(f"Train dataset size after validation: {len(train_dataset)}")
