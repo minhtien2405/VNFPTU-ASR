@@ -233,7 +233,7 @@ def main():
 
 		train_dataset, valid_dataset, test_dataset = load_and_prepare_data(config, logger)
 		
-				processor, model, metric, compute_metrics = setup_training_components(config, logger)
+		processor, model, metric, compute_metrics = setup_training_components(config, logger)
 		logger.info("Starting dataset mapping...")
 		train_dataset = train_dataset.map(
 			lambda batch: prepare_dataset(batch, processor, logger),
