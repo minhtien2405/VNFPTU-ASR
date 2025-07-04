@@ -198,6 +198,8 @@ def main():
 		
 		os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 		torch.cuda.empty_cache()
+
+		train_dataset, valid_dataset, test_dataset = load_and_prepare_data(config, logger)
 		
 		processor, model, metric, compute_metrics = setup_training_components(config, logger)
 		logger.info("Starting dataset mapping...")
