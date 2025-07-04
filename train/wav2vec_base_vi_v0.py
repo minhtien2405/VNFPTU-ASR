@@ -1,213 +1,275 @@
 import os
-import torch
-from dataclasses import dataclass
-from typing import Dict, List, Union
-from datasets import load_dataset, Audio
-import evaluate
-import mlflow
-import mlflow.pytorch
-from dotenv import load_dotenv
-from huggingface_hub import login
-from transformers import Wav2Vec2Processor, Wav2Vec2ForCTC, TrainingArguments, Trainer
-from transformers import TrainerCallback
-import numpy as np
 import json
 import logging
-
-log_dir = os.path.join(os.getcwd(), "logs")
-if not os.path.exists(log_dir):
-    os.makedirs(log_dir)
-
-logging.basicConfig(
-    filename=os.path.join(log_dir, "wav2vec_base_vi_v0.log"),
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-    force=True,
+from dataclasses import dataclass
+from typing import Dict, List, Union, Optional
+from datetime import datetime
+import torch
+from transformers import (
+	Wav2Vec2Processor,
+	Wav2Vec2ForCTC,
+	TrainingArguments,
+	Trainer,
+	TrainerCallback,
 )
+from datasets import load_dataset, Audio
+import evaluate
+from dotenv import load_dotenv
+from huggingface_hub import login
+import numpy as np
+import wandb
 
-load_dotenv("./configs/.env")
-login(token=os.getenv("HF_TOKEN"))
-mlflow.set_experiment("Wav2Vec2_Central_ViMD_FPTU")
-cache_dir = os.getcwd() + "/cache"
-os.environ["HF_DATASETS_CACHE"] = cache_dir
-os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
-torch.cuda.empty_cache()
+# Configuration class for model and training parameters
+@dataclass
+class TrainingConfig:
+	model_id: str = "nguyenvulebinh/wav2vec2-base-vietnamese-250h"
+	hub_model_id: str = "minhtien2405/wav2vec2-base-central-vi"
+	dataset_id: str = "nguyendv02/ViMD_Dataset"
+	output_dir: str = "./logs/wav2vec2-base-central-vi"
+	cache_dir: str = "./cache"
+	log_dir: str = "./logs"
+	model_save_dir: str = "./models/wav2vec2-base-central-vi"
+	per_device_train_batch_size: int = 4
+	gradient_accumulation_steps: int = 8
+	learning_rate: float = 1e-5
+	warmup_steps: int = 100
+	save_steps: int = 100
+	eval_steps: int = 100
+	logging_steps: int = 50
+	save_total_limit: int = 3
+	fp16: bool = True
+	project_name: str = "Wav2Vec2_Central_ViMD_FPTU"
+	run_name: str = f"wav2vec2_finetune_central_vi_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
-dataset = load_dataset("nguyendv02/ViMD_Dataset", cache_dir=cache_dir)
-train_dataset = dataset["train"].filter(lambda x: x["region"] == "Central")
-valid_dataset = dataset["valid"].filter(lambda x: x["region"] == "Central")
+# Set up logging
+def setup_logging(config: TrainingConfig) -> logging.Logger:
+	os.makedirs(config.log_dir, exist_ok=True)
+	logging.basicConfig(
+		filename=os.path.join(config.log_dir, "wav2vec_base_vi_v0.log"),
+		level=logging.INFO,
+		format="%(asctime)s - %(levelname)s - %(message)s",
+		datefmt="%Y-%m-%d %H:%M:%S",
+		force=True,
+	)
+	return logging.getLogger(__name__)
 
-train_dataset = train_dataset.cast_column("audio", Audio(sampling_rate=16000))
-valid_dataset = valid_dataset.cast_column("audio", Audio(sampling_rate=16000))
-
-logging.info(f"Train dataset size: {len(train_dataset)}")
-logging.info(f"Validation dataset size: {len(valid_dataset)}")
-logging.info(
-    f"Sample audio: {train_dataset[0]['audio']['array'][:5]}... (first 5 samples)"
-)
-logging.info(f"Data attributes: {train_dataset.features}")
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-logging.info(f"Using device: {device}")
-
-model_id = "nguyenvulebinh/wav2vec2-base-vietnamese-250h"
-processor = Wav2Vec2Processor.from_pretrained(model_id)
-
-
-def prepare_dataset(batch):
-    audio = batch["audio"]
-    batch["input_values"] = processor(
-        audio["array"], sampling_rate=audio["sampling_rate"]
-    ).input_values[0]
-    batch["labels"] = processor.tokenizer(batch["text"]).input_ids
-    return batch
-
-
-train_dataset = train_dataset.map(
-    prepare_dataset, remove_columns=train_dataset.column_names
-)
-valid_dataset = valid_dataset.map(
-    prepare_dataset, remove_columns=valid_dataset.column_names
-)
-
-logging.info(f"Processed train dataset: {train_dataset[0]}")
-logging.info(f"Processed validation dataset: {valid_dataset[0]}")
-
-model = Wav2Vec2ForCTC.from_pretrained(
-    model_id,
-    ctc_loss_reduction="mean",
-    pad_token_id=processor.tokenizer.pad_token_id,
-)
-
-logging.info(f"Model loaded: {model_id}")
-
-
+# Data collator for CTC
 @dataclass
 class DataCollatorCTCWithPadding:
-    processor: Wav2Vec2Processor
-    padding: Union[bool, str] = True
+	processor: Wav2Vec2Processor
+	padding: Union[bool, str] = True
 
-    def __call__(
-        self, features: List[Dict[str, Union[List[int], torch.Tensor]]]
-    ) -> Dict[str, torch.Tensor]:
-        input_features = [
-            {"input_values": feature["input_values"]} for feature in features
-        ]
-        label_features = [{"input_ids": feature["labels"]} for feature in features]
+	def __call__(self, features: List[Dict[str, Union[List[int], torch.Tensor]]]) -> Dict[str, torch.Tensor]:
+		input_features = [{"input_values": feature["input_values"]} for feature in features]
+		label_features = [{"input_ids": feature["labels"]} for feature in features]
 
-        batch = self.processor.pad(
-            input_features, padding=self.padding, return_tensors="pt"
-        )
-        labels_batch = self.processor.tokenizer.pad(
-            label_features, padding=self.padding, return_tensors="pt"
-        )
+		batch = self.processor.pad(input_features, padding=self.padding, return_tensors="pt")
+		labels_batch = self.processor.tokenizer.pad(label_features, padding=self.padding, return_tensors="pt")
+		
+		labels = labels_batch["input_ids"].masked_fill(labels_batch.attention_mask.ne(1), -100)
+		batch["labels"] = labels
+		return batch
 
-        labels = labels_batch["input_ids"].masked_fill(
-            labels_batch.attention_mask.ne(1), -100
-        )
-        batch["labels"] = labels
-        return batch
+# Wandb callback for logging metrics
+class WandbCallback(TrainerCallback):
+	def on_evaluate(self, args, state, control, metrics, **kwargs):
+		if "eval_wer" in metrics:
+			wandb.log({"eval_wer": metrics["eval_wer"], "step": state.global_step})
 
+def load_and_prepare_data(config: TrainingConfig, logger: logging.Logger):
+	"""Load and preprocess dataset"""
+	try:
+		os.environ["HF_DATASETS_CACHE"] = config.cache_dir
+		
+		dataset = load_dataset(config.dataset_id, cache_dir=config.cache_dir)
+		
+		train_dataset = dataset["train"].filter(lambda x: x["region"] == "Central")
+		valid_dataset = dataset["valid"].filter(lambda x: x["region"] == "Central")
+		
+		train_dataset = train_dataset.cast_column("audio", Audio(sampling_rate=16000))
+		valid_dataset = valid_dataset.cast_column("audio", Audio(sampling_rate=16000))
+		
+		logger.info(f"Train dataset size: {len(train_dataset)}")
+		logger.info(f"Validation dataset size: {len(valid_dataset)}")
+		
+		return train_dataset, valid_dataset
+	except Exception as e:
+		logger.error(f"Error loading dataset: {str(e)}")
+		raise
 
-data_collator = DataCollatorCTCWithPadding(processor=processor)
+def prepare_dataset(batch, processor: Wav2Vec2Processor):
+	"""Prepare dataset for training"""
+	audio = batch["audio"]
+	batch["input_values"] = processor(audio["array"], sampling_rate=audio["sampling_rate"]).input_values[0]
+	batch["labels"] = processor.tokenizer(batch["text"]).input_ids
+	return batch
 
-metric = evaluate.load("wer")
+def setup_training_components(config: TrainingConfig, logger: logging.Logger):
+	"""Set up model, processor, and metrics"""
+	try:
+		device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+		logger.info(f"Using device: {device}")
+		
+		processor = Wav2Vec2Processor.from_pretrained(config.model_id)
+		model = Wav2Vec2ForCTC.from_pretrained(
+			config.model_id,
+			ctc_loss_reduction="mean",
+			pad_token_id=processor.tokenizer.pad_token_id,
+		).to(device)
+		
+		# Freeze feature extractor layers
+		for param in model.wav2vec2.feature_extractor.parameters():
+			param.requires_grad = False
+		logger.info("Froze feature extractor layers for fine-tuning.")
+		
+		metric = evaluate.load("wer")
+		
+		def compute_metrics(pred):
+			pred_logits = pred.predictions
+			pred_ids = np.argmax(pred_logits, axis=-1)
+			pred_str = processor.batch_decode(pred_ids)
+			label_str = processor.batch_decode(pred.label_ids, group_tokens=False)
+			wer = metric.compute(predictions=pred_str, references=label_str)
+			return {"wer": wer}
+		
+		return processor, model, metric, compute_metrics
+	except Exception as e:
+		logger.error(f"Error setting up training components: {str(e)}")
+		raise
 
+def main():
+	# Initialize configuration
+	config = TrainingConfig()
+	logger = setup_logging(config)
+	
+	try:
+		# Environment setup
+		load_dotenv("./configs/.env")
+		
+		# Login to Hugging Face
+		hf_token = os.getenv("HF_TOKEN")
+		if not hf_token:
+			raise ValueError("HF_TOKEN not found in .env file")
+		login(token=hf_token)
+		logger.info("Logged in to Hugging Face Hub")
+		
+		# Login to Wandb
+		wandb_api_key = os.getenv("WANDB_API_KEY")
+		if not wandb_api_key:
+			raise ValueError("WANDB_API_KEY not found in .env file")
+		wandb.login(key=wandb_api_key)
+		logger.info("Logged in to Weights & Biases")
+		
+		# Initialize Wandb
+		wandb.init(
+			project=config.project_name,
+			name=config.run_name,
+			config=vars(config)
+		)
+		
+		os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+		torch.cuda.empty_cache()
+		
+		# Load and prepare data
+		train_dataset, valid_dataset = load_and_prepare_data(config, logger)
+		
+		# Process datasets
+		processor, model, metric, compute_metrics = setup_training_components(config, logger)
+		train_dataset = train_dataset.map(
+			lambda batch: prepare_dataset(batch, processor),
+			remove_columns=train_dataset.column_names,
+			num_proc=4
+		)
+		valid_dataset = valid_dataset.map(
+			lambda batch: prepare_dataset(batch, processor),
+			remove_columns=valid_dataset.column_names,
+			num_proc=4
+		)
+		
+		# Set up training arguments
+		training_args = TrainingArguments(
+			output_dir=config.output_dir,
+			per_device_train_batch_size=config.per_device_train_batch_size,
+			gradient_accumulation_steps=config.gradient_accumulation_steps,
+			learning_rate=config.learning_rate,
+			warmup_steps=config.warmup_steps,
+			save_total_limit=config.save_total_limit,
+			gradient_checkpointing=True,
+			fp16=config.fp16,
+			eval_strategy="steps",
+			optim="adamw_torch",
+			per_device_eval_batch_size=config.per_device_trainЭдүк_batch_size,
+			save_steps=config.save_steps,
+			eval_steps=config.eval_steps,
+			logging_steps=config.logging_steps,
+			load_best_model_at_end=True,
+			metric_for_best_model="wer",
+			greater_is_better=False,
+			push_to_hub=True,
+			hub_model_id=config.hub_model_id,
+			report_to=["wandb"],
+		)
+		
+		# Initialize trainer
+		trainer = Trainer(
+			model=model,
+			args=training_args,
+			train_dataset=train_dataset,
+			eval_dataset=valid_dataset,
+			data_collator=DataCollatorCTCWithPadding(processor=processor),
+			compute_metrics=compute_metrics,
+			callbacks=[WandbCallback()],
+		)
+		
+		# Start training
+		logger.info("Starting training...")
+		trainer.train()
+		logger.info("Training completed.")
+		
+		# Evaluate and save results
+		eval_results = trainer.evaluate()
+		wandb.log({"final_eval_wer": eval_results["eval_wer"]})
+		
+		wer_history = [
+			(log["step"], log["eval_wer"])
+			for log in trainer.state.log_history
+			if "eval_wer" in log
+		]
+		wer_history_path = os.path.join(config.output_dir, "wer_history.json")
+		with open(wer_history_path, "w") as f:
+			json.dump(wer_history, f)
+		
+		# Log artifact to Wandb
+		artifact = wandb.Artifact("wer_history", type="metrics")
+		artifact.add_file(wer_history_path)
+		wandb.log_artifact(artifact)
+		
+		# Save model and processor
+		os.makedirs(config.model_save_dir, exist_ok=True)
+		trainer.save_model(config.model_save_dir)
+		processor.save_pretrained(config.model_save_dir)
+		
+		# Push to Hugging Face Hub
+		trainer.push_to_hub(
+			commit_message="Fine-tuned Wav2Vec2 on ViMD Central region with layer freezing",
+			tags=["speech-recognition", "violetnamese", "central-vietnam"],
+			dataset=config.dataset_id,
+			language="vi",
+			finetuned_from=config.model_id,
+			tasks="automatic-speech-recognition",
+		)
+		processor.push_to_hub(config.hub_model_id)
+		
+		logger.info(f"Final evaluation results: {eval_results}")
+		logger.info("Model and processor saved and pushed to Hugging Face Hub.")
+		
+		# Finish Wandb run
+		wandb.finish()
+		
+	except Exception as e:
+		logger.error(f"Training failed: {str(e)}")
+		wandb.finish()
+		raise
 
-def compute_metrics(pred):
-    pred_logits = pred.predictions
-    pred_ids = np.argmax(pred_logits, axis=-1)
-    pred_str = processor.batch_decode(pred_ids)
-    label_str = processor.batch_decode(pred.label_ids, group_tokens=False)
-    wer = metric.compute(predictions=pred_str, references=label_str)
-    return {"wer": wer}
-
-
-class MLflowCallback(TrainerCallback):
-    def on_evaluate(self, args, state, control, metrics, **kwargs):
-        if "eval_wer" in metrics:
-            mlflow.log_metric("eval_wer", metrics["eval_wer"], step=state.global_step)
-
-
-training_args = TrainingArguments(
-    output_dir="./logs/wav2vec2-base-central-vi",
-    per_device_train_batch_size=4,
-    gradient_accumulation_steps=8,
-    learning_rate=1e-5,
-    warmup_steps=100,
-    save_total_limit=3,
-    gradient_checkpointing=True,
-    fp16=True,
-    eval_strategy="steps",
-    optim="adamw_torch",
-    per_device_eval_batch_size=4,
-    save_steps=100,
-    eval_steps=100,
-    logging_steps=50,
-    load_best_model_at_end=True,
-    metric_for_best_model="wer",
-    greater_is_better=False,
-    push_to_hub=True,
-    hub_model_id="minhtien2405/wav2vec2-base-central-vi",
-)
-with mlflow.start_run(run_name="wav2vec2_finetune_central_vi"):
-    mlflow.log_params(
-        {
-            "model_name": model_id,
-            "per_device_train_batch_size": training_args.per_device_train_batch_size,
-            "gradient_accumulation_steps": training_args.gradient_accumulation_steps,
-            "learning_rate": training_args.learning_rate,
-            "max_steps": training_args.max_steps,
-            "warmup_steps": training_args.warmup_steps,
-            "fp16": training_args.fp16,
-        }
-    )
-
-    trainer = Trainer(
-        model=model,
-        args=training_args,
-        train_dataset=train_dataset,
-        eval_dataset=valid_dataset,
-        data_collator=data_collator,
-        compute_metrics=compute_metrics,
-        callbacks=[MLflowCallback()],
-    )
-
-    trainer.train()
-    logging.info("Training completed.")
-
-    eval_results = trainer.evaluate()
-    mlflow.log_metric("final_eval_wer", eval_results["eval_wer"])
-
-    wer_history = [
-        (log["step"], log["eval_wer"])
-        for log in trainer.state.log_history
-        if "eval_wer" in log
-    ]
-    with open("./logs/wav2vec2-base-central-vi/wer_history.json", "w") as f:
-        json.dump(wer_history, f)
-    mlflow.log_artifact(
-        "./logs/wav2vec2-base-central-vi/wer_history.json", artifact_path="wer_history"
-    )
-    logging.info(f"Final evaluation results: {eval_results}")
-
-    trainer.save_model("./models/wav2vec2-base-central-vi")
-    processor.save_pretrained("./models/wav2vec2-base-central-vi")
-    logging.info("Model and processor saved locally.")
-
-    # mlflow.pytorch.log_model(model, "model")
-    # mlflow.log_artifact("./wav2vec2-base-central-vi", artifact_path="processor")
-
-    trainer.push_to_hub(
-        commit_message="Fine-tuned Wav2Vec2 on ViMD Central region",
-        tags=["speech-recognition", "vietnamese", "central-vietnam"],
-        dataset="nguyendv02/ViMD_Dataset",
-        language="vi",
-        finetuned_from=model_id,
-        tasks="automatic-speech-recognition",
-    )
-    processor.push_to_hub("minhtien2405/wav2vec2-base-central-vi")
-    logging.info("Model and processor pushed to Hugging Face Hub.")
-
-# torchrun --nproc_per_node=2 wav2vec_base_vi_v0.py
+if __name__ == "__main__":
+	main()
