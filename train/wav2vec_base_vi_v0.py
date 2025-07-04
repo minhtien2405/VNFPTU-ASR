@@ -20,6 +20,7 @@ import numpy as np
 import wandb
 import re
 
+os.environ["PYARROW_WITH_INT64"] = "1"
 
 @dataclass
 class TrainingConfig:
@@ -87,12 +88,29 @@ def validate_audio(sample, logger: logging.Logger) -> bool:
 		logger.error(f"Error validating audio sample {sample.get('path', 'unknown')}: {str(e)}")
 		return False
 	
+def validate_text(sample, logger: logging.Logger) -> bool:
+	"""Validate text labels for non-empty and reasonable length."""
+	try:
+		text = sample["text"]
+		if not text or len(text) == 0 or len(text) > 1000:  # Adjust max length as needed
+			logger.warning(f"Invalid text sample: {sample.get('path', 'unknown')}, text: {text}")
+			return False
+		return True
+	except Exception as e:
+		logger.error(f"Error validating text sample {sample.get('path', 'unknown')}: {str(e)}")
+		return False
+
 def normalize_text(text: str) -> str:
 	"""Clean and normalize text labels."""
-	text = text.lower()  # Convert to lowercase
-	text = re.sub(r'[^\w\s]', '', text)  # Remove punctuation
-	text = re.sub(r'\s+', ' ', text).strip()  # Normalize whitespace
-	return text
+	try:
+		text = text.lower()  # Convert to lowercase
+		text = re.sub(r'[^\w\s]', '', text)  # Remove punctuation
+		text = re.sub(r'\s+', ' ', text).strip()  # Normalize whitespace
+		return text
+	except Exception as e:
+		logging.getLogger(__name__).error(f"Error normalizing text: {str(e)}")
+		return text  # Return original text if normalization fails
+
 def load_and_prepare_data(config: TrainingConfig, logger: logging.Logger):
 	"""Load and preprocess dataset with validation."""
 	try:
@@ -116,9 +134,21 @@ def load_and_prepare_data(config: TrainingConfig, logger: logging.Logger):
 		test_dataset = test_dataset.cast_column("audio", Audio(sampling_rate=16000))
 		
 		# Clean text labels
-		train_dataset = train_dataset.map(lambda x: {"text": normalize_text(x["text"])})
-		valid_dataset = valid_dataset.map(lambda x: {"text": normalize_text(x["text"])})
-		test_dataset = test_dataset.map(lambda x: {"text": normalize_text(x["text"])})
+		train_dataset = train_dataset.map(
+			lambda batch: {"text": [normalize_text(t) for t in batch["text"]]},
+			batched=True,
+			batch_size=1000
+		)
+		valid_dataset = valid_dataset.map(
+			lambda batch: {"text": [normalize_text(t) for t in batch["text"]]},
+			batched=True,
+			batch_size=1000
+		)
+		test_dataset = test_dataset.map(
+			lambda batch: {"text": [normalize_text(t) for t in batch["text"]]},
+			batched=True,
+			batch_size=1000
+		)
 		
 		logger.info(f"Train dataset size after validation: {len(train_dataset)}")
 		logger.info(f"Validation dataset size after validation: {len(valid_dataset)}")
@@ -203,25 +233,28 @@ def main():
 
 		train_dataset, valid_dataset, test_dataset = load_and_prepare_data(config, logger)
 		
-		processor, model, metric, compute_metrics = setup_training_components(config, logger)
+				processor, model, metric, compute_metrics = setup_training_components(config, logger)
 		logger.info("Starting dataset mapping...")
 		train_dataset = train_dataset.map(
 			lambda batch: prepare_dataset(batch, processor, logger),
 			remove_columns=train_dataset.column_names,
-			num_proc=1,  
+			num_proc=1,
 			keep_in_memory=False,
+			batch_size=16,
 		).filter(lambda x: x is not None)
 		valid_dataset = valid_dataset.map(
 			lambda batch: prepare_dataset(batch, processor, logger),
 			remove_columns=valid_dataset.column_names,
 			num_proc=1,
 			keep_in_memory=False,
+			batch_size=16,
 		).filter(lambda x: x is not None)
 		test_dataset = test_dataset.map(
 			lambda batch: prepare_dataset(batch, processor, logger),
 			remove_columns=test_dataset.column_names,
 			num_proc=1,
 			keep_in_memory=False,
+			batch_size=16,
 		).filter(lambda x: x is not None)
 		logger.info("Dataset mapping completed.")
 		
