@@ -31,10 +31,10 @@ class TrainingConfig:
 	per_device_train_batch_size: int = 4
 	gradient_accumulation_steps: int = 8
 	learning_rate: float = 1e-5
-	warmup_steps: int = 100
-	save_steps: int = 100
-	eval_steps: int = 100
-	logging_steps: int = 50
+	warmup_steps: int = 20
+	save_steps: int = 40
+	eval_steps: int = 40
+	logging_steps: int = 20
 	save_total_limit: int = 3
 	fp16: bool = True
 	project_name: str = "Wav2Vec2_Central_ViMD_FPTU"
