@@ -119,9 +119,9 @@ def load_and_prepare_data(config: TrainingConfig, logger: logging.Logger):
 		dataset = load_dataset(config.dataset_id, cache_dir=config.cache_dir)
 		
 		# Validate audio samples
-		train_dataset = train_dataset.filter(lambda x: validate_audio(x, logger))
-		valid_dataset = valid_dataset.filter(lambda x: validate_audio(x, logger))
-		test_dataset = test_dataset.filter(lambda x: validate_audio(x, logger))
+		train_dataset = dataset["train"].filter(lambda x: validate_audio(x, logger))
+		valid_dataset = dataset["valid"].filter(lambda x: validate_audio(x, logger))
+		test_dataset = dataset["test"].filter(lambda x: validate_audio(x, logger))
 		
 		# Cast audio column to correct sampling rate
 		train_dataset = train_dataset.cast_column("audio", Audio(sampling_rate=16000))
