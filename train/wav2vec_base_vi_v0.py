@@ -327,7 +327,6 @@ def main():
 		)
 		processor.push_to_hub(config.hub_model_id)
 		
-		logger.info(f"Final evaluation results: {eval_results}")
 		logger.info("Model and processor saved and pushed to Hugging Face Hub.")
 		
 		wandb.finish()
