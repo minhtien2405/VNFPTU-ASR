@@ -25,12 +25,12 @@ os.environ["PYARROW_WITH_INT64"] = "1"
 @dataclass
 class TrainingConfig:
 	model_id: str = "nguyenvulebinh/wav2vec2-base-vietnamese-250h"
-	hub_model_id: str = "minhtien2405/wav2vec2-base-north-vi"
+	hub_model_id: str = "minhtien2405/wav2vec2-base-south-vi"
 	dataset_id: str = "nguyendv02/ViMD_Dataset"
-	output_dir: str = "./logs/wav2vec2-base-north-vi"
+	output_dir: str = "./logs/wav2vec2-base-south-vi"
 	cache_dir: str = "./cache"
 	log_dir: str = "./logs"
-	model_save_dir: str = "./models/wav2vec2-base-north-vi"
+	model_save_dir: str = "./models/wav2vec2-base-south-vi"
 	per_device_train_batch_size: int = 4
 	gradient_accumulation_steps: int = 8
 	learning_rate: float = 3e-4
@@ -41,13 +41,13 @@ class TrainingConfig:
 	logging_steps: int = 20
 	save_total_limit: int = 3
 	fp16: bool = True
-	project_name: str = "Wav2Vec2_North_ViMD_FPTU"
-	run_name: str = f"wav2vec2_finetune_north_vi_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+	project_name: str = "Wav2Vec2_South_ViMD_FPTU"
+	run_name: str = f"wav2vec2_finetune_south_vi_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
 def setup_logging(config: TrainingConfig) -> logging.Logger:
 	os.makedirs(config.log_dir, exist_ok=True)
 	logging.basicConfig(
-		filename=os.path.join(config.log_dir, "wav2vec_base_north_vi_250h_v0.log"),
+		filename=os.path.join(config.log_dir, "wav2vec_base_south_vi_250h_v0.log"),
 		level=logging.INFO,
 		format="%(asctime)s - %(levelname)s - %(message)s",
 		datefmt="%Y-%m-%d %H:%M:%S",
@@ -118,10 +118,10 @@ def load_and_prepare_data(config: TrainingConfig, logger: logging.Logger):
 		
 		dataset = load_dataset(config.dataset_id, cache_dir=config.cache_dir)
 		
-		# Filter for North region
-		train_dataset = dataset["train"].filter(lambda x: x["region"] == "North")
-		valid_dataset = dataset["valid"].filter(lambda x: x["region"] == "North")
-		test_dataset = dataset["test"].filter(lambda x: x["region"] == "North")
+		# Filter for South region
+		train_dataset = dataset["train"].filter(lambda x: x["region"] == "South")
+		valid_dataset = dataset["valid"].filter(lambda x: x["region"] == "South")
+		test_dataset = dataset["test"].filter(lambda x: x["region"] == "South")
 		
 		# Validate audio samples
 		train_dataset = train_dataset.filter(lambda x: validate_audio(x, logger))
@@ -305,7 +305,7 @@ def main():
 			for log in trainer.state.log_history
 			if "eval_wer" in log
 		]
-		wer_history_path = os.path.join(config.output_dir, "wav2vec_base_north_vi_250h_wer_history.json")
+		wer_history_path = os.path.join(config.output_dir, "wav2vec_base_south_vi_250h_wer_history.json")
 		with open(wer_history_path, "w") as f:
 			json.dump(wer_history, f)
 		
@@ -318,8 +318,8 @@ def main():
 		processor.save_pretrained(config.model_save_dir)
 		
 		trainer.push_to_hub(
-			commit_message="Fine-tuned Wav2Vec2_250h on ViMD North region with layer freezing",
-			tags=["speech-recognition", "vietnamese", "north-vietnam"],
+			commit_message="Fine-tuned Wav2Vec2_250h on ViMD South region with layer freezing",
+			tags=["speech-recognition", "vietnamese", "south-vietnam"],
 			dataset=config.dataset_id,
 			language="vi",
 			finetuned_from=config.model_id,
