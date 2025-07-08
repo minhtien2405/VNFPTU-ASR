@@ -293,7 +293,7 @@ def main():
 		)
 		
 		logger.info("Starting training...")
-		trainer.train(resume_from_checkpoint=True)
+		trainer.train() #resume_from_checkpoint=True)
 		logger.info("Training completed.")
 		
 		test_results = trainer.evaluate(eval_dataset=test_dataset)
