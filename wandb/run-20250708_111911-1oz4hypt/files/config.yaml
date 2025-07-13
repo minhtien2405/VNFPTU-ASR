@@ -1,0 +1,629 @@
+_name_or_path:
+    value: nguyenvulebinh/wav2vec2-base-vietnamese-250h
+_wandb:
+    value:
+        cli_version: 0.21.0
+        e:
+            fj6mc88khe0oj4907d62osadtd0glyix:
+                codePath: train/wav2vec_base_vi_north_v0.py
+                codePathLocal: train/wav2vec_base_vi_north_v0.py
+                cpu_count: 4
+                cpu_count_logical: 8
+                cudaVersion: "12.4"
+                disk:
+                    /:
+                        total: "528173547520"
+                        used: "318384742400"
+                email: phamminhtien2405@gmail.com
+                executable: /home/phamminhtien2405/VNFPTU-ASR/.venv/bin/python
+                git:
+                    commit: 464b116d21dc54dab067b761e7ce14d4e2a7e445
+                    remote: https://github.com/minhtien2405/VNFPTU-ASR.git
+                gpu: NVIDIA L4
+                gpu_count: 1
+                gpu_nvidia:
+                    - architecture: Ada
+                      cudaCores: 7424
+                      memoryTotal: "24152899584"
+                      name: NVIDIA L4
+                      uuid: GPU-24e048f3-ed23-0857-07a2-fc679d608f2e
+                host: voviai-wav2vec
+                memory:
+                    total: "33671041024"
+                os: Linux-5.10.0-34-cloud-amd64-x86_64-with-glibc2.31
+                program: /home/phamminhtien2405/VNFPTU-ASR/train/wav2vec_base_vi_north_v0.py
+                python: CPython 3.10.17
+                root: /home/phamminhtien2405/VNFPTU-ASR
+                startedAt: "2025-07-08T11:19:11.081166Z"
+                writerId: fj6mc88khe0oj4907d62osadtd0glyix
+        m:
+            - "1": train/global_step
+              "6":
+                - 3
+              "7": []
+            - "2": '*'
+              "5": 1
+              "6":
+                - 1
+              "7": []
+        python_version: 3.10.17
+        t:
+            "1":
+                - 1
+                - 5
+                - 11
+                - 41
+                - 49
+                - 51
+                - 53
+                - 71
+                - 98
+                - 100
+            "2":
+                - 1
+                - 5
+                - 11
+                - 41
+                - 49
+                - 51
+                - 53
+                - 71
+                - 98
+                - 100
+            "3":
+                - 2
+                - 7
+                - 13
+                - 16
+                - 19
+                - 62
+                - 66
+            "4": 3.10.17
+            "5": 0.21.0
+            "6": 4.53.0
+            "9":
+                "1": transformers_trainer
+            "12": 0.21.0
+            "13": linux-x86_64
+accelerator_config:
+    value:
+        dispatch_batches: null
+        even_batches: true
+        gradient_accumulation_kwargs: null
+        non_blocking: false
+        split_batches: false
+        use_seedable_sampler: true
+activation_dropout:
+    value: 0.1
+adafactor:
+    value: false
+adam_beta1:
+    value: 0.9
+adam_beta2:
+    value: 0.999
+adam_epsilon:
+    value: 1e-08
+adapter_attn_dim:
+    value: null
+adapter_kernel_size:
+    value: 3
+adapter_stride:
+    value: 2
+add_adapter:
+    value: false
+add_cross_attention:
+    value: false
+apply_spec_augment:
+    value: true
+architectures:
+    value:
+        - Wav2Vec2ForCTC
+attention_dropout:
+    value: 0.1
+auto_find_batch_size:
+    value: false
+average_tokens_across_devices:
+    value: false
+bad_words_ids:
+    value: null
+batch_eval_metrics:
+    value: false
+begin_suppress_tokens:
+    value: null
+bf16:
+    value: false
+bf16_full_eval:
+    value: false
+bos_token_id:
+    value: 1
+cache_dir:
+    value: ./cache
+chunk_size_feed_forward:
+    value: 0
+classifier_proj_size:
+    value: 256
+codevector_dim:
+    value: 256
+contrastive_logits_temperature:
+    value: 0.1
+conv_bias:
+    value: false
+conv_dim:
+    value:
+        - 512
+        - 512
+        - 512
+        - 512
+        - 512
+        - 512
+        - 512
+conv_kernel:
+    value:
+        - 10
+        - 3
+        - 3
+        - 3
+        - 3
+        - 2
+        - 2
+conv_stride:
+    value:
+        - 5
+        - 2
+        - 2
+        - 2
+        - 2
+        - 2
+        - 2
+cross_attention_hidden_size:
+    value: null
+ctc_loss_reduction:
+    value: mean
+ctc_zero_infinity:
+    value: false
+data_seed:
+    value: null
+dataloader_drop_last:
+    value: false
+dataloader_num_workers:
+    value: 0
+dataloader_persistent_workers:
+    value: false
+dataloader_pin_memory:
+    value: true
+dataloader_prefetch_factor:
+    value: null
+dataset_id:
+    value: nguyendv02/ViMD_Dataset
+ddp_backend:
+    value: null
+ddp_broadcast_buffers:
+    value: null
+ddp_bucket_cap_mb:
+    value: null
+ddp_find_unused_parameters:
+    value: null
+ddp_timeout:
+    value: 1800
+debug:
+    value: []
+decoder_start_token_id:
+    value: null
+deepspeed:
+    value: null
+disable_tqdm:
+    value: false
+diversity_loss_weight:
+    value: 0.1
+diversity_penalty:
+    value: 0
+do_eval:
+    value: true
+do_predict:
+    value: false
+do_sample:
+    value: false
+do_stable_layer_norm:
+    value: false
+do_train:
+    value: false
+early_stopping:
+    value: false
+encoder_no_repeat_ngram_size:
+    value: 0
+eos_token_id:
+    value: 2
+eval_accumulation_steps:
+    value: null
+eval_delay:
+    value: 0
+eval_do_concat_batches:
+    value: true
+eval_on_start:
+    value: false
+eval_steps:
+    value: 40
+eval_strategy:
+    value: steps
+eval_use_gather_object:
+    value: false
+exponential_decay_length_penalty:
+    value: null
+feat_extract_activation:
+    value: gelu
+feat_extract_dropout:
+    value: 0
+feat_extract_norm:
+    value: group
+feat_proj_dropout:
+    value: 0.1
+feat_quantizer_dropout:
+    value: 0
+final_dropout:
+    value: 0.1
+finetuning_task:
+    value: null
+forced_bos_token_id:
+    value: null
+forced_eos_token_id:
+    value: null
+fp16:
+    value: true
+fp16_backend:
+    value: auto
+fp16_full_eval:
+    value: false
+fp16_opt_level:
+    value: O1
+fsdp:
+    value: []
+fsdp_config:
+    value:
+        min_num_params: 0
+        xla: false
+        xla_fsdp_grad_ckpt: false
+        xla_fsdp_v2: false
+fsdp_min_num_params:
+    value: 0
+fsdp_transformer_layer_cls_to_wrap:
+    value: null
+full_determinism:
+    value: false
+gradient_accumulation_steps:
+    value: 8
+gradient_checkpointing:
+    value: true
+gradient_checkpointing_kwargs:
+    value: null
+greater_is_better:
+    value: false
+group_by_length:
+    value: false
+half_precision_backend:
+    value: auto
+hidden_act:
+    value: gelu
+hidden_dropout:
+    value: 0.1
+hidden_dropout_prob:
+    value: 0.1
+hidden_size:
+    value: 768
+hub_always_push:
+    value: false
+hub_model_id:
+    value: minhtien2405/wav2vec2-base-north-vi
+hub_private_repo:
+    value: null
+hub_revision:
+    value: null
+hub_strategy:
+    value: every_save
+hub_token:
+    value: <HUB_TOKEN>
+id2label:
+    value:
+        "0": LABEL_0
+        "1": LABEL_1
+ignore_data_skip:
+    value: false
+include_for_metrics:
+    value: []
+include_inputs_for_metrics:
+    value: false
+include_num_input_tokens_seen:
+    value: false
+include_tokens_per_second:
+    value: false
+initializer_range:
+    value: 0.02
+intermediate_size:
+    value: 3072
+is_decoder:
+    value: false
+is_encoder_decoder:
+    value: false
+jit_mode_eval:
+    value: false
+label_names:
+    value: null
+label_smoothing_factor:
+    value: 0
+label2id:
+    value:
+        LABEL_0: 0
+        LABEL_1: 1
+layer_norm_eps:
+    value: 1e-05
+layerdrop:
+    value: 0.1
+learning_rate:
+    value: 0.0003
+length_column_name:
+    value: length
+length_penalty:
+    value: 1
+liger_kernel_config:
+    value: null
+load_best_model_at_end:
+    value: true
+local_rank:
+    value: 0
+log_dir:
+    value: ./logs
+log_level:
+    value: passive
+log_level_replica:
+    value: warning
+log_on_each_node:
+    value: true
+logging_dir:
+    value: ./logs/wav2vec2-base-north-vi/runs/Jul08_11-19-15_voviai-wav2vec
+logging_first_step:
+    value: false
+logging_nan_inf_filter:
+    value: true
+logging_steps:
+    value: 20
+logging_strategy:
+    value: steps
+lr_scheduler_type:
+    value: linear
+mask_feature_length:
+    value: 10
+mask_feature_min_masks:
+    value: 0
+mask_feature_prob:
+    value: 0
+mask_time_length:
+    value: 10
+mask_time_min_masks:
+    value: 2
+mask_time_prob:
+    value: 0.05
+max_grad_norm:
+    value: 1
+max_length:
+    value: 20
+max_steps:
+    value: -1
+metric_for_best_model:
+    value: wer
+min_length:
+    value: 0
+model/num_parameters:
+    value: 94456302
+model_id:
+    value: nguyenvulebinh/wav2vec2-base-vietnamese-250h
+model_save_dir:
+    value: ./models/wav2vec2-base-north-vi
+model_type:
+    value: wav2vec2
+mp_parameters:
+    value: ""
+neftune_noise_alpha:
+    value: null
+no_cuda:
+    value: false
+no_repeat_ngram_size:
+    value: 0
+num_adapter_layers:
+    value: 3
+num_attention_heads:
+    value: 12
+num_beam_groups:
+    value: 1
+num_beams:
+    value: 1
+num_codevector_groups:
+    value: 2
+num_codevectors_per_group:
+    value: 320
+num_conv_pos_embedding_groups:
+    value: 16
+num_conv_pos_embeddings:
+    value: 128
+num_feat_extract_layers:
+    value: 7
+num_hidden_layers:
+    value: 12
+num_negatives:
+    value: 100
+num_return_sequences:
+    value: 1
+num_train_epochs:
+    value: 30
+optim:
+    value: adamw_torch
+optim_args:
+    value: null
+optim_target_modules:
+    value: null
+output_attentions:
+    value: false
+output_dir:
+    value: ./logs/wav2vec2-base-north-vi
+output_hidden_size:
+    value: 768
+output_hidden_states:
+    value: false
+output_scores:
+    value: false
+overwrite_output_dir:
+    value: false
+pad_token_id:
+    value: 109
+past_index:
+    value: -1
+per_device_eval_batch_size:
+    value: 4
+per_device_train_batch_size:
+    value: 4
+per_gpu_eval_batch_size:
+    value: null
+per_gpu_train_batch_size:
+    value: null
+prediction_loss_only:
+    value: false
+prefix:
+    value: null
+problem_type:
+    value: null
+proj_codevector_dim:
+    value: 256
+project_name:
+    value: Wav2Vec2_North_ViMD_FPTU
+push_to_hub:
+    value: true
+push_to_hub_model_id:
+    value: null
+push_to_hub_organization:
+    value: null
+push_to_hub_token:
+    value: <PUSH_TO_HUB_TOKEN>
+ray_scope:
+    value: last
+remove_invalid_values:
+    value: false
+remove_unused_columns:
+    value: true
+repetition_penalty:
+    value: 1
+report_to:
+    value:
+        - wandb
+restore_callback_states_from_checkpoint:
+    value: false
+resume_from_checkpoint:
+    value: null
+return_dict:
+    value: true
+return_dict_in_generate:
+    value: false
+run_name:
+    value: ./logs/wav2vec2-base-north-vi
+save_on_each_node:
+    value: false
+save_only_model:
+    value: false
+save_safetensors:
+    value: true
+save_steps:
+    value: 40
+save_strategy:
+    value: steps
+save_total_limit:
+    value: 3
+seed:
+    value: 42
+sep_token_id:
+    value: null
+skip_memory_metrics:
+    value: true
+suppress_tokens:
+    value: null
+task_specific_params:
+    value: null
+tdnn_dilation:
+    value:
+        - 1
+        - 2
+        - 3
+        - 1
+        - 1
+tdnn_dim:
+    value:
+        - 512
+        - 512
+        - 512
+        - 512
+        - 1500
+tdnn_kernel:
+    value:
+        - 5
+        - 3
+        - 3
+        - 1
+        - 1
+temperature:
+    value: 1
+tf_legacy_loss:
+    value: false
+tf32:
+    value: null
+tie_encoder_decoder:
+    value: false
+tie_word_embeddings:
+    value: true
+tokenizer_class:
+    value: null
+top_k:
+    value: 50
+top_p:
+    value: 1
+torch_compile:
+    value: false
+torch_compile_backend:
+    value: null
+torch_compile_mode:
+    value: null
+torch_dtype:
+    value: float32
+torch_empty_cache_steps:
+    value: null
+torchdynamo:
+    value: null
+torchscript:
+    value: false
+tpu_metrics_debug:
+    value: false
+tpu_num_cores:
+    value: null
+transformers_version:
+    value: 4.53.0
+typical_p:
+    value: 1
+use_bfloat16:
+    value: false
+use_cpu:
+    value: false
+use_ipex:
+    value: false
+use_legacy_prediction_loop:
+    value: false
+use_liger_kernel:
+    value: false
+use_mps_device:
+    value: false
+use_weighted_layer_sum:
+    value: false
+vocab_size:
+    value: 110
+warmup_ratio:
+    value: 0
+warmup_steps:
+    value: 20
+weight_decay:
+    value: 0
+xvector_output_dim:
+    value: 512

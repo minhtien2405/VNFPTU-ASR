@@ -1,0 +1,40 @@
+{
+  "os":  "Linux-5.10.0-34-cloud-amd64-x86_64-with-glibc2.31",
+  "python":  "CPython 3.10.17",
+  "startedAt":  "2025-07-08T00:08:55.337685Z",
+  "program":  "/home/phamminhtien2405/VNFPTU-ASR/train/wav2vec_base_vi_north_v0.py",
+  "codePath":  "train/wav2vec_base_vi_north_v0.py",
+  "codePathLocal":  "train/wav2vec_base_vi_north_v0.py",
+  "git":  {
+    "remote":  "https://github.com/minhtien2405/VNFPTU-ASR.git",
+    "commit":  "b3e8cd48c249c3ae5b98bc90dc7b6e40b4e3eac2"
+  },
+  "email":  "phamminhtien2405@gmail.com",
+  "root":  "/home/phamminhtien2405/VNFPTU-ASR",
+  "host":  "voviai-wav2vec",
+  "executable":  "/home/phamminhtien2405/VNFPTU-ASR/.venv/bin/python",
+  "cpu_count":  4,
+  "cpu_count_logical":  8,
+  "gpu":  "NVIDIA L4",
+  "gpu_count":  1,
+  "disk":  {
+    "/":  {
+      "total":  "528173547520",
+      "used":  "167138160640"
+    }
+  },
+  "memory":  {
+    "total":  "33671041024"
+  },
+  "gpu_nvidia":  [
+    {
+      "name":  "NVIDIA L4",
+      "memoryTotal":  "24152899584",
+      "cudaCores":  7424,
+      "architecture":  "Ada",
+      "uuid":  "GPU-24e048f3-ed23-0857-07a2-fc679d608f2e"
+    }
+  ],
+  "cudaVersion":  "12.4",
+  "writerId":  "tmky5gh6e5q3ih3hzj8lmmpe47hbrt49"
+}

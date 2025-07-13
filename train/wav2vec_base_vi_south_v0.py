@@ -35,7 +35,7 @@ class TrainingConfig:
 	gradient_accumulation_steps: int = 8
 	learning_rate: float = 3e-4
 	warmup_steps: int = 20
-	num_train_epochs: int = 30
+	num_train_epochs: int = 50
 	save_steps: int = 40
 	eval_steps: int = 40
 	logging_steps: int = 20

@@ -1,0 +1,108 @@
+_wandb:
+    value:
+        cli_version: 0.21.0
+        e:
+            5fyjc0u7tqggw3nszk8omgr3vpzzart0:
+                codePath: train/wav2vec_base_vi_south_v0.py
+                codePathLocal: train/wav2vec_base_vi_south_v0.py
+                cpu_count: 4
+                cpu_count_logical: 8
+                cudaVersion: "12.4"
+                disk:
+                    /:
+                        total: "528173547520"
+                        used: "203993337856"
+                email: phamminhtien2405@gmail.com
+                executable: /home/phamminhtien2405/VNFPTU-ASR/.venv/bin/python
+                git:
+                    commit: b3e8cd48c249c3ae5b98bc90dc7b6e40b4e3eac2
+                    remote: https://github.com/minhtien2405/VNFPTU-ASR.git
+                gpu: NVIDIA L4
+                gpu_count: 1
+                gpu_nvidia:
+                    - architecture: Ada
+                      cudaCores: 7424
+                      memoryTotal: "24152899584"
+                      name: NVIDIA L4
+                      uuid: GPU-24e048f3-ed23-0857-07a2-fc679d608f2e
+                host: voviai-wav2vec
+                memory:
+                    total: "33671041024"
+                os: Linux-5.10.0-34-cloud-amd64-x86_64-with-glibc2.31
+                program: /home/phamminhtien2405/VNFPTU-ASR/train/wav2vec_base_vi_south_v0.py
+                python: CPython 3.10.17
+                root: /home/phamminhtien2405/VNFPTU-ASR
+                startedAt: "2025-07-08T00:28:50.461539Z"
+                writerId: 5fyjc0u7tqggw3nszk8omgr3vpzzart0
+        m: []
+        python_version: 3.10.17
+        t:
+            "1":
+                - 1
+                - 5
+                - 11
+                - 41
+                - 49
+                - 51
+                - 53
+                - 71
+                - 98
+                - 100
+            "2":
+                - 1
+                - 5
+                - 11
+                - 41
+                - 49
+                - 51
+                - 53
+                - 71
+                - 98
+                - 100
+            "3":
+                - 2
+                - 13
+                - 16
+            "4": 3.10.17
+            "5": 0.21.0
+            "6": 4.53.0
+            "12": 0.21.0
+            "13": linux-x86_64
+cache_dir:
+    value: ./cache
+dataset_id:
+    value: nguyendv02/ViMD_Dataset
+eval_steps:
+    value: 40
+fp16:
+    value: true
+gradient_accumulation_steps:
+    value: 8
+hub_model_id:
+    value: minhtien2405/wav2vec2-base-south-vi
+learning_rate:
+    value: 0.0003
+log_dir:
+    value: ./logs
+logging_steps:
+    value: 20
+model_id:
+    value: nguyenvulebinh/wav2vec2-base-vietnamese-250h
+model_save_dir:
+    value: ./models/wav2vec2-base-south-vi
+num_train_epochs:
+    value: 30
+output_dir:
+    value: ./logs/wav2vec2-base-south-vi
+per_device_train_batch_size:
+    value: 4
+project_name:
+    value: Wav2Vec2_South_ViMD_FPTU
+run_name:
+    value: wav2vec2_finetune_south_vi_20250708_002849
+save_steps:
+    value: 40
+save_total_limit:
+    value: 3
+warmup_steps:
+    value: 20
