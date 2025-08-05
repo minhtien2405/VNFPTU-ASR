@@ -280,7 +280,7 @@ def load_and_prepare_data(config: TrainingConfig, logger: logging.Logger):
 			
 			# Process samples to download audio and normalize text
 			processed_samples = []
-			for i, sample in tqdm(enumerate(split_data), total=len(split_data), desc=f"Processing {split_name} split"):
+			for i, sample in enumerate(split_data): #tqdm(enumerate(split_data), total=len(split_data), desc=f"Processing {split_name} split"):
 				if i % 100 == 0:
 					logger.info(f"Processing {split_name} sample {i}/{len(split_data)}")
 				
