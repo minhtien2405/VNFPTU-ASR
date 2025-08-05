@@ -285,9 +285,12 @@ def load_and_prepare_data(config: TrainingConfig, logger: logging.Logger):
 					logger.info(f"Processing {split_name} sample {i}/{len(split_data)}")
 				
 				processed_sample = process_audio_sample(sample, logger)
+				logger.info(f"Processed sample {i}: {processed_sample}")
 				if processed_sample and validate_audio(processed_sample, logger) and validate_text(processed_sample, logger):
 					processed_samples.append(processed_sample)
-			
+				else:
+					logger.warning(f"Invalid sample at index {i} in {split_name} split: {sample}")
+
 			if not processed_samples:
 				raise ValueError(f"No valid samples found in {split_name} split")
 			
