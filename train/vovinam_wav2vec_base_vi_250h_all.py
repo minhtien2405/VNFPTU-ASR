@@ -12,7 +12,7 @@ from transformers import (
 	Trainer,
 	TrainerCallback,
 )
-from datasets import load_dataset, Audio, Dataset
+from datasets import load_dataset, Audio, Dataset, Features, Value
 import evaluate
 from dotenv import load_dotenv
 from huggingface_hub import login
@@ -250,56 +250,99 @@ def process_audio_sample(sample, logger: logging.Logger) -> Dict:
 		return None
 
 def load_and_prepare_data(config: TrainingConfig, logger: logging.Logger):
-    """Load and preprocess dataset with validation and S3 audio download."""
+    """
+    Load and preprocess dataset efficiently using .map() to avoid OOM errors.
+    """
     try:
         os.environ["HF_DATASETS_CACHE"] = config.cache_dir
         
-        logger.info(f"Loading dataset: {config.dataset_id}")
-        dataset = load_dataset(config.dataset_id, cache_dir=config.cache_dir)
+        logger.info(f"Loading dataset from Hugging Face Hub: {config.dataset_id}")
+        # Tăng streaming=True để có thể xử lý các bộ dữ liệu cực lớn mà không cần tải hết về
+        dataset = load_dataset(config.dataset_id, cache_dir=config.cache_dir, streaming=False) # Tạm thời để False cho .map hoạt động
         
-        logger.info(f"Dataset structure: {dataset}")
-        logger.info(f"Dataset columns: {dataset['train'].column_names if 'train' in dataset else list(dataset.keys())}")
-        
-        train_split = dataset["train"]
-        valid_split = dataset["validation"] 
-        test_split = dataset["test"]
-        
-        logger.info(f"Original train dataset size: {len(train_split)}")
-        logger.info(f"Original validation dataset size: {len(valid_split)}")
-        logger.info(f"Original test dataset size: {len(test_split)}")
-        
-        # I have re-enabled the tqdm progress bar for you.
-        def process_dataset_split(split_data, split_name):
-            logger.info(f"Processing {split_name} split...")
-            
-            processed_samples = []
-            for sample in tqdm(split_data, desc=f"Processing {split_name} split"):
-                processed_sample = process_audio_sample(sample, logger)
-                if processed_sample and validate_audio(processed_sample, logger) and validate_text(processed_sample, logger):
-                    processed_samples.append(processed_sample)
-                else:
-                    # The original logging is good, let's keep it but reduce frequency if it's too noisy
-                    # For now, it's useful for debugging.
-                    logger.warning(f"Skipping invalid sample in {split_name} split: {sample['audioLink']}")
+        logger.info(f"Initial dataset structure: {dataset}")
 
-            if not processed_samples:
-                raise ValueError(f"No valid samples found in {split_name} split after processing. Check download or audio loading logs.")
+        # --- Hàm helper để xử lý từng mẫu ---
+        def download_and_prepare_sample(sample):
+            """
+            Hàm này xử lý MỘT mẫu. Nó tải audio, chuẩn hóa text,
+            và trả về một dict với các trường mới/đã cập nhật.
+            """
+            audio_path = download_audio_from_s3(sample["audioLink"], cache_dir=os.path.join(config.cache_dir, "audio"))
             
-            processed_dataset = Dataset.from_list(processed_samples)
-            processed_dataset = processed_dataset.cast_column("audio", Audio(sampling_rate=16000))
+            # Nếu tải lỗi, đánh dấu để lọc sau
+            if not audio_path:
+                sample["is_valid"] = False
+                sample["audio_path"] = None
+                return sample
+
+            # Mặc định là True, sẽ đổi thành False nếu gặp lỗi
+            sample["is_valid"] = True
             
-            logger.info(f"{split_name.capitalize()} dataset size after processing: {len(processed_dataset)}")
-            return processed_dataset
+            # Kiểm tra xem audio có thể load được không và có thời lượng hợp lý không
+            try:
+                # Chỉ cần lấy thông tin, không cần load cả array vào bộ nhớ ở bước này
+                info = librosa.info(path=audio_path)
+                duration = info.duration
+                if duration < 0.1 or duration > 30:
+                    sample["is_valid"] = False
+            except Exception as e:
+                logger.warning(f"Could not load audio info for {audio_path}: {e}")
+                sample["is_valid"] = False
+
+            # Chuẩn hóa text và kiểm tra
+            text = sample.get("text", "")
+            normalized_text = normalize_text(text)
+            if not normalized_text or len(normalized_text.strip()) < 2:
+                sample["is_valid"] = False
+
+            sample["text"] = normalized_text
+            # Đổi tên cột 'audioLink' thành 'audio_path' để không bị nhầm lẫn
+            sample["audio_path"] = audio_path
+            return sample
+
+        # --- Quy trình xử lý ---
+        for split in dataset.keys():
+            logger.info(f"Processing '{split}' split...")
+            
+            # 1. Map hàm tải và xác thực
+            # Bước này tạo cột 'audio_path' và 'is_valid' mà không load hết audio vào RAM
+            processed_split = dataset[split].map(
+                download_and_prepare_sample,
+                num_proc=4, # Tăng số tiến trình để xử lý nhanh hơn
+                desc=f"Downloading and validating {split} data"
+            )
+
+            # 2. Lọc ra các mẫu không hợp lệ
+            original_size = len(processed_split)
+            filtered_split = processed_split.filter(
+                lambda sample: sample["is_valid"],
+                desc=f"Filtering invalid samples in {split} split"
+            )
+            filtered_size = len(filtered_split)
+            logger.info(f"Filtered {split} split: {original_size} -> {filtered_size} samples.")
+
+            if filtered_size == 0:
+                raise ValueError(f"No valid samples remained in '{split}' split after filtering.")
+
+            # 3. Đặt feature 'audio' để load từ cột 'audio_path' mới
+            # Bước này chỉ định cho 'datasets' tự động load audio từ đường dẫn khi cần
+            filtered_split = filtered_split.cast_column("audio", Audio(sampling_rate=16000))
+            
+            # 4. Xóa các cột tạm không cần thiết nữa
+            # Giữ lại các cột metadata gốc có thể hữu ích
+            columns_to_remove = [col for col in ["audioLink", "is_valid", "__index_level_0__"] if col in filtered_split.column_names]
+            filtered_split = filtered_split.remove_columns(columns_to_remove)
+            
+            # Cập nhật lại dataset với split đã được xử lý
+            dataset[split] = filtered_split
+
+        logger.info(f"Final processed dataset: {dataset}")
         
-        logger.info("Starting dataset processing...")
-        train_dataset = process_dataset_split(train_split, "train")
-        valid_dataset = process_dataset_split(valid_split, "validation")
-        test_dataset = process_dataset_split(test_split, "test")
-        
-        return train_dataset, valid_dataset, test_dataset
+        return dataset["train"], dataset["validation"], dataset["test"]
         
     except Exception as e:
-        logger.error(f"Error loading dataset: {str(e)}")
+        logger.error(f"Error during data preparation: {str(e)}")
         raise
 
 def prepare_dataset(batch, processor: Wav2Vec2Processor, logger: logging.Logger):
