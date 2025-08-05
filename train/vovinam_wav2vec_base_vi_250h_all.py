@@ -83,57 +83,53 @@ class WandbCallback(TrainerCallback):
 			wandb.log({"eval_wer": metrics["eval_wer"], "step": state.global_step})
 
 def download_audio_from_s3(url: str, cache_dir: str = "./audio_cache") -> Optional[str]:
-	"""Download audio file from S3 URL and return local path."""
-	try:
-		os.makedirs(cache_dir, exist_ok=True)
-		
-		# Create a unique filename from the URL to avoid conflicts
-		# Extract filename from URL or create one from URL hash
-		if '/' in url:
-			filename = url.split('/')[-1]
-		else:
-			filename = f"{hash(url)}.wav"
-			
-		# Ensure audio extension
-		if not any(filename.lower().endswith(ext) for ext in ['.wav', '.mp3', '.flac', '.m4a', '.ogg']):
-			filename += '.wav'
-		
-		local_path = os.path.join(cache_dir, filename)
-		
-		# Check if file already exists and is valid
-		if os.path.exists(local_path) and os.path.getsize(local_path) > 0:
-			return local_path
-			
-		# Download the file with proper headers
-		headers = {
-			'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-		}
-		response = requests.get(url, stream=True, timeout=60, headers=headers)
-		response.raise_for_status()
-		
-		# Write file with temporary name first, then rename (atomic operation)
-		temp_path = local_path + '.tmp'
-		with open(temp_path, 'wb') as f:
-			for chunk in response.iter_content(chunk_size=8192):
-				if chunk:  # filter out keep-alive chunks
-					f.write(chunk)
-		
-		# Rename temp file to final name
-		os.rename(temp_path, local_path)
-		
-		# Verify file was downloaded correctly
-		if os.path.getsize(local_path) == 0:
-			os.remove(local_path)
-			raise ValueError("Downloaded file is empty")
-		
-		return local_path
-	except Exception as e:
-		logging.getLogger(__name__).error(f"Error downloading audio from {url}: {str(e)}")
-		# Clean up temp file if it exists
-		temp_path = os.path.join(cache_dir, filename + '.tmp') if 'filename' in locals() else None
-		if temp_path and os.path.exists(temp_path):
-			os.remove(temp_path)
-		return None
+    """Download audio file from S3 URL and return local path, preserving original extension."""
+    try:
+        os.makedirs(cache_dir, exist_ok=True)
+        
+        # Use the filename directly from the URL, which is correct (e.g., ends with .aac)
+        if '/' in url:
+            filename = url.split('/')[-1]
+        else:
+            # Fallback for unusual URLs
+            filename = f"{hash(url)}.audio" 
+
+        local_path = os.path.join(cache_dir, filename)
+        
+        # Check if file already exists and is valid
+        if os.path.exists(local_path) and os.path.getsize(local_path) > 0:
+            return local_path
+            
+        # Download the file
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36'
+        }
+        response = requests.get(url, stream=True, timeout=60, headers=headers)
+        response.raise_for_status()
+        
+        # Write file with temporary name first, then rename (atomic operation)
+        temp_path = local_path + '.tmp'
+        with open(temp_path, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:  # filter out keep-alive chunks
+                    f.write(chunk)
+        
+        os.rename(temp_path, local_path)
+        
+        # Verify file was downloaded correctly
+        if os.path.getsize(local_path) == 0:
+            os.remove(local_path)
+            raise ValueError("Downloaded file is empty")
+            
+        return local_path
+    except Exception as e:
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error downloading audio from {url}: {str(e)}")
+        # Clean up temp file if it exists
+        temp_path = os.path.join(cache_dir, filename + '.tmp') if 'filename' in locals() else None
+        if temp_path and os.path.exists(temp_path):
+            os.remove(temp_path)
+        return None
 
 def load_audio_from_path(audio_path: str, target_sr: int = 16000) -> Optional[Dict]:
 	"""Load audio from local path and return audio dict."""
@@ -254,69 +250,57 @@ def process_audio_sample(sample, logger: logging.Logger) -> Dict:
 		return None
 
 def load_and_prepare_data(config: TrainingConfig, logger: logging.Logger):
-	"""Load and preprocess dataset with validation and S3 audio download."""
-	try:
-		os.environ["HF_DATASETS_CACHE"] = config.cache_dir
-		
-		# Load the dataset
-		logger.info(f"Loading dataset: {config.dataset_id}")
-		dataset = load_dataset(config.dataset_id, cache_dir=config.cache_dir)
-		
-		logger.info(f"Dataset structure: {dataset}")
-		logger.info(f"Dataset columns: {dataset['train'].column_names if 'train' in dataset else list(dataset.keys())}")
-		
-		# Handle VoviAI Dataset splits (train, validation, test)
-		train_split = dataset["train"]
-		valid_split = dataset["validation"] 
-		test_split = dataset["test"]
-		
-		logger.info(f"Original train dataset size: {len(train_split)}")
-		logger.info(f"Original validation dataset size: {len(valid_split)}")
-		logger.info(f"Original test dataset size: {len(test_split)}")
-		
-		# Process datasets with audio download and validation
-		def process_dataset_split(split_data, split_name):
-			logger.info(f"Processing {split_name} split...")
-			
-			# Process samples to download audio and normalize text
-			processed_samples = []
-			for i, sample in enumerate(split_data): #tqdm(enumerate(split_data), total=len(split_data), desc=f"Processing {split_name} split"):
-				if i % 100 == 0:
-					logger.info(f"Processing {split_name} sample {i}/{len(split_data)}")
-				
-				processed_sample = process_audio_sample(sample, logger)
-				logger.info(f"Processed sample {i}: {processed_sample}")
-				if processed_sample and validate_audio(processed_sample, logger) and validate_text(processed_sample, logger):
-					processed_samples.append(processed_sample)
-				else:
-					logger.warning(f"Invalid sample at index {i} in {split_name} split: {sample}")
+    """Load and preprocess dataset with validation and S3 audio download."""
+    try:
+        os.environ["HF_DATASETS_CACHE"] = config.cache_dir
+        
+        logger.info(f"Loading dataset: {config.dataset_id}")
+        dataset = load_dataset(config.dataset_id, cache_dir=config.cache_dir)
+        
+        logger.info(f"Dataset structure: {dataset}")
+        logger.info(f"Dataset columns: {dataset['train'].column_names if 'train' in dataset else list(dataset.keys())}")
+        
+        train_split = dataset["train"]
+        valid_split = dataset["validation"] 
+        test_split = dataset["test"]
+        
+        logger.info(f"Original train dataset size: {len(train_split)}")
+        logger.info(f"Original validation dataset size: {len(valid_split)}")
+        logger.info(f"Original test dataset size: {len(test_split)}")
+        
+        # I have re-enabled the tqdm progress bar for you.
+        def process_dataset_split(split_data, split_name):
+            logger.info(f"Processing {split_name} split...")
+            
+            processed_samples = []
+            for sample in tqdm(split_data, desc=f"Processing {split_name} split"):
+                processed_sample = process_audio_sample(sample, logger)
+                if processed_sample and validate_audio(processed_sample, logger) and validate_text(processed_sample, logger):
+                    processed_samples.append(processed_sample)
+                else:
+                    # The original logging is good, let's keep it but reduce frequency if it's too noisy
+                    # For now, it's useful for debugging.
+                    logger.warning(f"Skipping invalid sample in {split_name} split: {sample['audioLink']}")
 
-			if not processed_samples:
-				raise ValueError(f"No valid samples found in {split_name} split")
-			
-			# Create new dataset from processed samples
-			processed_dataset = Dataset.from_list(processed_samples)
-			
-			# Cast audio column to correct sampling rate
-			processed_dataset = processed_dataset.cast_column("audio", Audio(sampling_rate=16000))
-			
-			logger.info(f"{split_name.capitalize()} dataset size after processing: {len(processed_dataset)}")
-			return processed_dataset
-		
-		# Process each split
-		logger.info("Starting dataset processing...")
-		train_dataset = process_dataset_split(train_split, "train")
-		logger.info(f"Train dataset size after processing: {len(train_dataset)}")
-		valid_dataset = process_dataset_split(valid_split, "validation")
-		logger.info(f"Validation dataset size after processing: {len(valid_dataset)}")
-		test_dataset = process_dataset_split(test_split, "test")
-		logger.info(f"Test dataset size after processing: {len(test_dataset)}")
-		
-		return train_dataset, valid_dataset, test_dataset
-		
-	except Exception as e:
-		logger.error(f"Error loading dataset: {str(e)}")
-		raise
+            if not processed_samples:
+                raise ValueError(f"No valid samples found in {split_name} split after processing. Check download or audio loading logs.")
+            
+            processed_dataset = Dataset.from_list(processed_samples)
+            processed_dataset = processed_dataset.cast_column("audio", Audio(sampling_rate=16000))
+            
+            logger.info(f"{split_name.capitalize()} dataset size after processing: {len(processed_dataset)}")
+            return processed_dataset
+        
+        logger.info("Starting dataset processing...")
+        train_dataset = process_dataset_split(train_split, "train")
+        valid_dataset = process_dataset_split(valid_split, "validation")
+        test_dataset = process_dataset_split(test_split, "test")
+        
+        return train_dataset, valid_dataset, test_dataset
+        
+    except Exception as e:
+        logger.error(f"Error loading dataset: {str(e)}")
+        raise
 
 def prepare_dataset(batch, processor: Wav2Vec2Processor, logger: logging.Logger):
 	"""Prepare dataset for training with error handling."""
