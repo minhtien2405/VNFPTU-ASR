@@ -258,7 +258,7 @@ def load_and_prepare_data(config: TrainingConfig, logger: logging.Logger):
 		
 		# Load the dataset
 		logger.info(f"Loading dataset: {config.dataset_id}")
-		dataset = load_dataset(config.dataset_id, cache_dir=config.cache_dir, use_auth_token=True)
+		dataset = load_dataset(config.dataset_id, cache_dir=config.cache_dir)
 		
 		logger.info(f"Dataset structure: {dataset}")
 		logger.info(f"Dataset columns: {dataset['train'].column_names if 'train' in dataset else list(dataset.keys())}")
