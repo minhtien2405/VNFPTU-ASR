@@ -23,6 +23,8 @@ import requests
 import librosa
 import tempfile
 from pathlib import Path
+from tqdm.auto import tqdm
+import logging
 
 os.environ["PYARROW_WITH_INT64"] = "1"
 
@@ -278,7 +280,7 @@ def load_and_prepare_data(config: TrainingConfig, logger: logging.Logger):
 			
 			# Process samples to download audio and normalize text
 			processed_samples = []
-			for i, sample in enumerate(split_data):
+			for i, sample in tqdm(enumerate(split_data), total=len(split_data), desc=f"Processing {split_name} split"):
 				if i % 100 == 0:
 					logger.info(f"Processing {split_name} sample {i}/{len(split_data)}")
 				
@@ -299,9 +301,13 @@ def load_and_prepare_data(config: TrainingConfig, logger: logging.Logger):
 			return processed_dataset
 		
 		# Process each split
+		logger.info("Starting dataset processing...")
 		train_dataset = process_dataset_split(train_split, "train")
+		logger.info(f"Train dataset size after processing: {len(train_dataset)}")
 		valid_dataset = process_dataset_split(valid_split, "validation")
+		logger.info(f"Validation dataset size after processing: {len(valid_dataset)}")
 		test_dataset = process_dataset_split(test_split, "test")
+		logger.info(f"Test dataset size after processing: {len(test_dataset)}")
 		
 		return train_dataset, valid_dataset, test_dataset
 		
@@ -381,7 +387,9 @@ def main():
 		os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 		torch.cuda.empty_cache()
 
+		logger.info("Starting dataset loading and preparation...")
 		train_dataset, valid_dataset, test_dataset = load_and_prepare_data(config, logger)
+		logger.info("Dataset loading and preparation completed.")
 		
 		processor, model, metric, compute_metrics = setup_training_components(config, logger)
 		logger.info("Starting dataset mapping...")
