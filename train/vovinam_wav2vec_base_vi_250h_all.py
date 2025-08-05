@@ -425,21 +425,21 @@ def main():
 		logger.info("Starting dataset mapping...")
 		train_dataset = train_dataset.map(
 			lambda batch: prepare_dataset(batch, processor, logger),
-			remove_columns=train_dataset.column_names,
+			# remove_columns=train_dataset.column_names,
 			num_proc=1,
 			keep_in_memory=False,
 			batch_size=16,
 		).filter(lambda x: x is not None)
 		valid_dataset = valid_dataset.map(
 			lambda batch: prepare_dataset(batch, processor, logger),
-			remove_columns=valid_dataset.column_names,
+			# remove_columns=valid_dataset.column_names,
 			num_proc=1,
 			keep_in_memory=False,
 			batch_size=16,
 		).filter(lambda x: x is not None)
 		test_dataset = test_dataset.map(
 			lambda batch: prepare_dataset(batch, processor, logger),
-			remove_columns=test_dataset.column_names,
+			# remove_columns=test_dataset.column_names,
 			num_proc=1,
 			keep_in_memory=False,
 			batch_size=16,
