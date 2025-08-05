@@ -251,54 +251,57 @@ def process_audio_sample(sample, logger: logging.Logger) -> Dict:
 
 def load_and_prepare_data(config: TrainingConfig, logger: logging.Logger):
     """
-    Load and preprocess dataset efficiently using .map() to avoid OOM errors.
+    Load and preprocess dataset efficiently using .map(), with correct duration check and detailed logging.
     """
     try:
         os.environ["HF_DATASETS_CACHE"] = config.cache_dir
         
         logger.info(f"Loading dataset from Hugging Face Hub: {config.dataset_id}")
-        # Tăng streaming=True để có thể xử lý các bộ dữ liệu cực lớn mà không cần tải hết về
-        dataset = load_dataset(config.dataset_id, cache_dir=config.cache_dir, streaming=False) # Tạm thời để False cho .map hoạt động
+        dataset = load_dataset(config.dataset_id, cache_dir=config.cache_dir)
         
         logger.info(f"Initial dataset structure: {dataset}")
 
-        # --- Hàm helper để xử lý từng mẫu ---
+        # --- Hàm helper để xử lý từng mẫu với log chi tiết ---
         def download_and_prepare_sample(sample):
             """
             Hàm này xử lý MỘT mẫu. Nó tải audio, chuẩn hóa text,
             và trả về một dict với các trường mới/đã cập nhật.
             """
-            audio_path = download_audio_from_s3(sample["audioLink"], cache_dir=os.path.join(config.cache_dir, "audio"))
-            
-            # Nếu tải lỗi, đánh dấu để lọc sau
-            if not audio_path:
-                sample["is_valid"] = False
-                sample["audio_path"] = None
-                return sample
-
-            # Mặc định là True, sẽ đổi thành False nếu gặp lỗi
+            # Mặc định là hợp lệ, sẽ đổi nếu có lỗi
             sample["is_valid"] = True
+
+            # 1. Tải file
+            audio_path = download_audio_from_s3(sample["audioLink"], cache_dir=os.path.join(config.cache_dir, "audio"))
+            if not audio_path:
+                logger.warning(f"Failed to download audio, skipping. URL: {sample['audioLink']}")
+                sample["is_valid"] = False
+                return sample
             
-            # Kiểm tra xem audio có thể load được không và có thời lượng hợp lý không
+            sample["audio_path"] = audio_path
+
+            # 2. Kiểm tra thời lượng audio
             try:
-                # Chỉ cần lấy thông tin, không cần load cả array vào bộ nhớ ở bước này
-                info = librosa.info(path=audio_path)
-                duration = info.duration
+                # SỬA LỖI TẠI ĐÂY: Dùng hàm đúng là librosa.get_duration()
+                duration = librosa.get_duration(path=audio_path)
                 if duration < 0.1 or duration > 30:
+                    logger.warning(f"Invalid duration ({duration:.2f}s), skipping. Path: {audio_path}")
                     sample["is_valid"] = False
             except Exception as e:
-                logger.warning(f"Could not load audio info for {audio_path}: {e}")
+                logger.warning(f"Could not get duration, skipping. Path: {audio_path}, Error: {e}")
                 sample["is_valid"] = False
+            
+            # Nếu audio đã không hợp lệ thì không cần kiểm tra text nữa
+            if not sample["is_valid"]:
+                return sample
 
-            # Chuẩn hóa text và kiểm tra
+            # 3. Kiểm tra và chuẩn hóa text
             text = sample.get("text", "")
             normalized_text = normalize_text(text)
             if not normalized_text or len(normalized_text.strip()) < 2:
+                logger.warning(f"Invalid or empty text ('{text}'), skipping. Path: {audio_path}")
                 sample["is_valid"] = False
-
+            
             sample["text"] = normalized_text
-            # Đổi tên cột 'audioLink' thành 'audio_path' để không bị nhầm lẫn
-            sample["audio_path"] = audio_path
             return sample
 
         # --- Quy trình xử lý ---
@@ -306,10 +309,9 @@ def load_and_prepare_data(config: TrainingConfig, logger: logging.Logger):
             logger.info(f"Processing '{split}' split...")
             
             # 1. Map hàm tải và xác thực
-            # Bước này tạo cột 'audio_path' và 'is_valid' mà không load hết audio vào RAM
             processed_split = dataset[split].map(
                 download_and_prepare_sample,
-                num_proc=4, # Tăng số tiến trình để xử lý nhanh hơn
+                num_proc=4,
                 desc=f"Downloading and validating {split} data"
             )
 
@@ -317,24 +319,22 @@ def load_and_prepare_data(config: TrainingConfig, logger: logging.Logger):
             original_size = len(processed_split)
             filtered_split = processed_split.filter(
                 lambda sample: sample["is_valid"],
+                num_proc=4,
                 desc=f"Filtering invalid samples in {split} split"
             )
             filtered_size = len(filtered_split)
             logger.info(f"Filtered {split} split: {original_size} -> {filtered_size} samples.")
 
-            if filtered_size == 0:
-                raise ValueError(f"No valid samples remained in '{split}' split after filtering.")
+            if filtered_size == 0 and original_size > 0:
+                raise ValueError(f"No valid samples remained in '{split}' split after filtering. Check logs for warnings.")
 
             # 3. Đặt feature 'audio' để load từ cột 'audio_path' mới
-            # Bước này chỉ định cho 'datasets' tự động load audio từ đường dẫn khi cần
             filtered_split = filtered_split.cast_column("audio", Audio(sampling_rate=16000))
             
             # 4. Xóa các cột tạm không cần thiết nữa
-            # Giữ lại các cột metadata gốc có thể hữu ích
-            columns_to_remove = [col for col in ["audioLink", "is_valid", "__index_level_0__"] if col in filtered_split.column_names]
+            columns_to_remove = [col for col in ["audioLink", "is_valid", "__index_level_0__", "audio_path"] if col in filtered_split.column_names]
             filtered_split = filtered_split.remove_columns(columns_to_remove)
             
-            # Cập nhật lại dataset với split đã được xử lý
             dataset[split] = filtered_split
 
         logger.info(f"Final processed dataset: {dataset}")
