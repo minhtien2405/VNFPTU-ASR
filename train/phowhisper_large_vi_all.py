@@ -133,8 +133,8 @@ logging.info(f"Model loaded: {model_id}")
 peft_model = peft.get_peft_model(
     peft.prepare_model_for_kbit_training(
         model,
-        use_gradient_checkpointing=True,
-        gradient_checkpointing_kwargs={"use_reentrant": False},
+        # use_gradient_checkpointing=True,
+        # gradient_checkpointing_kwargs={"use_reentrant": False},
     ),
     peft.LoraConfig(
         r=32,
@@ -221,18 +221,19 @@ training_args = Seq2SeqTrainingArguments(
     per_device_train_batch_size=4,
     gradient_accumulation_steps=8,
     learning_rate=1e-5,
-    warmup_steps=100,
+    warmup_steps=400,
     # max_steps=1000, # testing
     gradient_checkpointing=True,
+    gradient_checkpointing_kwargs={"use_reentrant": False},
     fp16=True,
     optim="adamw_bnb_8bit",
     eval_strategy="no",
     per_device_eval_batch_size=4,
-    save_steps=100,
+    save_steps=200,
     # eval_steps=100,
     num_train_epochs=30,
     save_total_limit=3,
-    logging_steps=50,
+    logging_steps=200,
     # load_best_model_at_end=True,
     metric_for_best_model="wer",
     greater_is_better=False,
