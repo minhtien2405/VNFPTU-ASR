@@ -214,7 +214,7 @@ def main():
 		wandb_api_key = os.getenv("WANDB_API_KEY")
 		if not wandb_api_key:
 			raise ValueError("WANDB_API_KEY not found in .env file")
-		# wandb.login(key=wandb_api_key)
+		wandb.login(key=wandb_api_key)
 		logger.info("Logged in to Weights & Biases")
 		
 		wandb.init(
