@@ -230,6 +230,7 @@ training_args = Seq2SeqTrainingArguments(
     per_device_eval_batch_size=4,
     save_steps=100,
     # eval_steps=100,
+    num_train_epochs=30,
     save_total_limit=3,
     logging_steps=50,
     # load_best_model_at_end=True,
