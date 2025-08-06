@@ -214,7 +214,7 @@ def main():
 		wandb_api_key = os.getenv("WANDB_API_KEY")
 		if not wandb_api_key:
 			raise ValueError("WANDB_API_KEY not found in .env file")
-		wandb.login(key=wandb_api_key)
+		# wandb.login(key=wandb_api_key)
 		logger.info("Logged in to Weights & Biases")
 		
 		wandb.init(
@@ -324,12 +324,14 @@ def main():
 		
 		logger.info("Model and processor saved and pushed to Hugging Face Hub.")
 		
-		wandb.finish()
-		
 	except Exception as e:
 		logger.error(f"Training failed: {str(e)}")
 		wandb.finish()
 		raise
+	finally:
+		if wandb.run is not None:
+			logger.info("Finishing wandb run.")
+			wandb.finish()
 
 if __name__ == "__main__":
 	main()
