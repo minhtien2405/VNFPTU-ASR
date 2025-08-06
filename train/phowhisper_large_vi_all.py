@@ -67,8 +67,8 @@ def filter_long_audio(example):
 
 logging.info(f"Number of long audio samples: {num_of_long_audio}")
 
-train_dataset = train_dataset.filter(filter_long_audio)
-valid_dataset = valid_dataset.filter(filter_long_audio)
+train_dataset = train_dataset.filter(filter_long_audio, num_proc=3)
+valid_dataset = valid_dataset.filter(filter_long_audio, num_proc=3)
 
 logging.info(f"Train dataset size: {len(train_dataset)}")
 logging.info(f"Validation dataset size: {len(valid_dataset)}")
