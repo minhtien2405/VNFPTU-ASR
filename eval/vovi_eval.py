@@ -16,6 +16,7 @@ import librosa
 import requests
 import re
 from tqdm.auto import tqdm
+from ..utils.vovi_utils import download_audio_from_s3, normalize_text
 
 @dataclass
 class EvalConfig:
@@ -36,8 +37,6 @@ def setup_logging(config: EvalConfig) -> logging.Logger:
         force=True,
     )
     return logging.getLogger(__name__)
-
-from utils.vovi_utils import download_audio_from_s3, normalize_text
 
 @dataclass
 class DataCollatorCTCWithPadding:
