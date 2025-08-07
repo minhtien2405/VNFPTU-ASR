@@ -83,76 +83,80 @@ def setup_logging(config: TrainingConfig) -> logging.Logger:
 # =================================================================================
 
 def load_and_prepare_data(config: TrainingConfig, logger: logging.Logger):
-	"""Tải và tiền xử lý bộ dữ liệu VoviAI."""
-	try:
-		os.environ["HF_DATASETS_CACHE"] = config.cache_dir
-		logger.info(f"Đang tải dataset từ Hugging Face Hub: {config.dataset_id}")
-		dataset = load_dataset(config.dataset_id, cache_dir=config.cache_dir)
-		logger.info(f"Cấu trúc dataset ban đầu: {dataset}")
+    """
+    Load and preprocess dataset efficiently, preparing audio_path for explicit loading later.
+    """
+    try:
+        os.environ["HF_DATASETS_CACHE"] = config.cache_dir
+        logger.info(f"Loading dataset from Hugging Face Hub: {config.dataset_id}")
+        dataset = load_dataset(config.dataset_id, cache_dir=config.cache_dir)
+        logger.info(f"Initial dataset structure: {dataset}")
 
-		def download_and_validate_sample(sample):
-			sample["is_valid"] = True
-			audio_path = download_audio_from_s3(sample["audioLink"], cache_dir=os.path.join(config.cache_dir, "audio"))
-			
-			if not audio_path:
-				logger.warning(f"Tải audio thất bại, bỏ qua. URL: {sample['audioLink']}")
-				sample["is_valid"] = False
-				return sample
-			sample["audio_path"] = audio_path
+        def download_and_prepare_sample(sample):
+            sample["is_valid"] = True
+            audio_path = download_audio_from_s3(sample["audioLink"], cache_dir=os.path.join(config.cache_dir, "audio"))
+            if not audio_path:
+                logger.warning(f"Failed to download audio, skipping. URL: {sample['audioLink']}")
+                sample["is_valid"] = False
+                return sample
+            sample["audio_path"] = audio_path
 
-			try:
-				duration = librosa.get_duration(path=audio_path)
-				if duration < 0.1 or duration > 30:
-					logger.warning(f"Thời lượng không hợp lệ ({duration:.2f}s), bỏ qua. Path: {audio_path}")
-					sample["is_valid"] = False
-			except Exception as e:
-				logger.warning(f"Không thể lấy thời lượng, bỏ qua. Path: {audio_path}, Lỗi: {e}")
-				sample["is_valid"] = False
-			
-			if not sample["is_valid"]: return sample
+            try:
+                duration = librosa.get_duration(path=audio_path)
+                if duration < 0.1 or duration > 30:
+                    logger.warning(f"Invalid duration ({duration:.2f}s), skipping. Path: {audio_path}")
+                    sample["is_valid"] = False
+            except Exception as e:
+                logger.warning(f"Could not get duration, skipping. Path: {audio_path}, Error: {e}")
+                sample["is_valid"] = False
+            if not sample["is_valid"]: return sample
 
-			text = sample.get("text", "")
-			normalized_text = normalize_text(text)
-			if not normalized_text or len(normalized_text.strip()) < 2:
-				logger.warning(f"Văn bản không hợp lệ hoặc rỗng ('{text}'), bỏ qua. Path: {audio_path}")
-				sample["is_valid"] = False
-			sample["text"] = normalized_text
-			return sample
+            text = sample.get("text", "")
+            normalized_text = normalize_text(text)
+            if not normalized_text or len(normalized_text.strip()) < 2:
+                logger.warning(f"Invalid or empty text ('{text}'), skipping. Path: {audio_path}")
+                sample["is_valid"] = False
+            sample["text"] = normalized_text
+            return sample
 
-		for split in dataset.keys():
-			logger.info(f"Đang xử lý split '{split}'...")
-			processed_split = dataset[split].map(
-				download_and_validate_sample, num_proc=4, desc=f"Tải và xác thực dữ liệu {split}"
-			)
-			original_size = len(processed_split)
-			filtered_split = processed_split.filter(
-				lambda sample: sample["is_valid"], num_proc=4, desc=f"Lọc mẫu không hợp lệ trong split {split}"
-			)
-			filtered_size = len(filtered_split)
-			logger.info(f"Đã lọc split {split}: {original_size} -> {filtered_size} mẫu.")
-			
-			columns_to_remove = [col for col in ["audio", "audioLink", "is_valid", "__index_level_0__"] if col in filtered_split.column_names]
-			if columns_to_remove:
-				filtered_split = filtered_split.remove_columns(columns_to_remove)
-			
-			dataset[split] = filtered_split
+        for split in dataset.keys():
+            logger.info(f"Processing '{split}' split...")
+            processed_split = dataset[split].map(
+                download_and_prepare_sample, num_proc=4, desc=f"Downloading and validating {split} data"
+            )
+            original_size = len(processed_split)
+            filtered_split = processed_split.filter(
+                lambda sample: sample["is_valid"], num_proc=4, desc=f"Filtering invalid samples in {split} split"
+            )
+            filtered_size = len(filtered_split)
+            logger.info(f"Filtered {split} split: {original_size} -> {filtered_size} samples.")
+            if filtered_size == 0 and original_size > 0:
+                raise ValueError(f"No valid samples remained in '{split}' split after filtering. Check logs for warnings.")
 
-		logger.info(f"Dataset đã xử lý xong: {dataset}")
-		return dataset["train"], dataset["validation"], dataset["test"]
-	except Exception as e:
-		logger.error(f"Lỗi trong quá trình chuẩn bị dữ liệu: {str(e)}")
-		raise
+            # THAY ĐỔI QUAN TRỌNG: BỎ cast_column và xóa các cột không cần thiết
+            # Chúng ta sẽ giữ lại 'audio_path' để dùng ở bước sau.
+            columns_to_remove = [col for col in ["audio", "audioLink", "is_valid", "__index_level_0__"] if col in filtered_split.column_names]
+            if columns_to_remove:
+                filtered_split = filtered_split.remove_columns(columns_to_remove)
+            
+            dataset[split] = filtered_split
+
+        logger.info(f"Final processed dataset: {dataset}")
+        return dataset["train"], dataset["validation"], dataset["test"]
+    except Exception as e:
+        logger.error(f"Error during data preparation: {str(e)}")
+        raise
 
 def prepare_dataset_for_whisper(batch, processor: WhisperProcessor, logger: logging.Logger):
 	"""Chuẩn bị dataset cho Whisper."""
 	try:
 		audio_array, sampling_rate = librosa.load(batch["audio_path"], sr=16000)
-		
-		batch["input_features"] = processor(audio_array, sampling_rate=sampling_rate).input_features[0]
+
+		batch["input_values"] = processor(audio_array, sampling_rate=sampling_rate).input_values[0]
 		batch["labels"] = processor.tokenizer(batch["text"]).input_ids
 		return batch
 	except Exception as e:
-		logger.error(f"Lỗi khi xử lý file {batch.get('audio_path', 'UNKNOWN')}: {str(e)}")
+		logger.error(f"Error processing file {batch.get('audio_path', 'UNKNOWN')}: {str(e)}")
 		return None
 
 # =================================================================================
