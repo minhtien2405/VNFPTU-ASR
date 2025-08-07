@@ -281,7 +281,7 @@ if __name__ == "__main__":
 
     results = evaluate(dataset)
 
-    save_results(results, output_file="eval_results_all.txt")
+    save_results(results, output_file="eval_results_ahowhisper_large_vi_all.txt")
 
     logging.info("Evaluation script completed successfully.")
     print("Evaluation completed. Check logs and results in the logs directory.")
