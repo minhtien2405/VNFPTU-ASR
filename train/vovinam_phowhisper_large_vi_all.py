@@ -1,0 +1,348 @@
+import os
+import json
+import logging
+from dataclasses import dataclass
+from typing import Dict, List, Union, Any
+from datetime import datetime
+import torch
+from transformers import (
+	WhisperProcessor,
+	WhisperForConditionalGeneration,
+	Seq2SeqTrainingArguments,
+	Seq2SeqTrainer,
+	BitsAndBytesConfig,
+)
+from datasets import load_dataset
+import evaluate
+from dotenv import load_dotenv
+from huggingface_hub import login
+import numpy as np
+import wandb
+import librosa
+import peft
+import accelerate
+
+from utils.vovi_utils import download_audio_from_s3, normalize_text, WandbCallback
+
+# =================================================================================
+# Configuration
+# =================================================================================
+os.environ["PYARROW_WITH_INT64"] = "1"
+
+@dataclass
+class TrainingConfig:
+	# Model and Hub IDs
+	model_id: str = "minhtien2405/phowhisper-large-all-vi"
+	hub_model_id: str = "minhtien2405/vovinam-phowhisper-large-vi"
+	
+	# Dataset
+	dataset_id: str = "minhtien2405/VoviAIDataset"
+	
+	# Directories
+	output_dir: str = "./logs/vovinam_phowhisper-large-vi"
+	cache_dir: str = "./cache"
+	log_dir: str = "./logs"
+	model_save_dir: str = "./models/vovinam_phowhisper-large-vi"
+	
+	# Training Hyperparameters
+	per_device_train_batch_size: int = 4
+	gradient_accumulation_steps: int = 8
+	learning_rate: float = 1e-5
+	warmup_steps: int = 100
+	num_train_epochs: int = 3
+	save_steps: int = 100
+	eval_steps: int = 100
+	logging_steps: int = 25
+	save_total_limit: int = 3
+	
+	# Technical Configs
+	fp16: bool = True
+	gradient_checkpointing: bool = True
+	
+	# Project Tracking
+	project_name: str = "Vovinam_PhoWhisper_Large_Finetune"
+	run_name: str = f"vovinam_phowhisper_finetune_voviai_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+# =================================================================================
+# Logging Setup (specific to this script)
+# =================================================================================
+
+def setup_logging(config: TrainingConfig) -> logging.Logger:
+	os.makedirs(config.log_dir, exist_ok=True)
+	logging.basicConfig(
+		filename=os.path.join(config.log_dir, "vovinam_phowhisper_large_voviai_v0.log"),
+		level=logging.INFO,
+		format="%(asctime)s - %(levelname)s - %(message)s",
+		datefmt="%Y-%m-%d %H:%M:%S",
+		force=True,
+	)
+	return logging.getLogger(__name__)
+
+# =================================================================================
+# Data Loading and Preparation
+# =================================================================================
+
+def load_and_prepare_data(config: TrainingConfig, logger: logging.Logger):
+	"""Tải và tiền xử lý bộ dữ liệu VoviAI."""
+	try:
+		os.environ["HF_DATASETS_CACHE"] = config.cache_dir
+		logger.info(f"Đang tải dataset từ Hugging Face Hub: {config.dataset_id}")
+		dataset = load_dataset(config.dataset_id, cache_dir=config.cache_dir)
+		logger.info(f"Cấu trúc dataset ban đầu: {dataset}")
+
+		def download_and_validate_sample(sample):
+			sample["is_valid"] = True
+			audio_path = download_audio_from_s3(sample["audioLink"], cache_dir=os.path.join(config.cache_dir, "audio"))
+			
+			if not audio_path:
+				logger.warning(f"Tải audio thất bại, bỏ qua. URL: {sample['audioLink']}")
+				sample["is_valid"] = False
+				return sample
+			sample["audio_path"] = audio_path
+
+			try:
+				duration = librosa.get_duration(path=audio_path)
+				if duration < 0.1 or duration > 30:
+					logger.warning(f"Thời lượng không hợp lệ ({duration:.2f}s), bỏ qua. Path: {audio_path}")
+					sample["is_valid"] = False
+			except Exception as e:
+				logger.warning(f"Không thể lấy thời lượng, bỏ qua. Path: {audio_path}, Lỗi: {e}")
+				sample["is_valid"] = False
+			
+			if not sample["is_valid"]: return sample
+
+			text = sample.get("text", "")
+			normalized_text = normalize_text(text)
+			if not normalized_text or len(normalized_text.strip()) < 2:
+				logger.warning(f"Văn bản không hợp lệ hoặc rỗng ('{text}'), bỏ qua. Path: {audio_path}")
+				sample["is_valid"] = False
+			sample["text"] = normalized_text
+			return sample
+
+		for split in dataset.keys():
+			logger.info(f"Đang xử lý split '{split}'...")
+			processed_split = dataset[split].map(
+				download_and_validate_sample, num_proc=4, desc=f"Tải và xác thực dữ liệu {split}"
+			)
+			original_size = len(processed_split)
+			filtered_split = processed_split.filter(
+				lambda sample: sample["is_valid"], num_proc=4, desc=f"Lọc mẫu không hợp lệ trong split {split}"
+			)
+			filtered_size = len(filtered_split)
+			logger.info(f"Đã lọc split {split}: {original_size} -> {filtered_size} mẫu.")
+			
+			columns_to_remove = [col for col in ["audio", "audioLink", "is_valid", "__index_level_0__"] if col in filtered_split.column_names]
+			if columns_to_remove:
+				filtered_split = filtered_split.remove_columns(columns_to_remove)
+			
+			dataset[split] = filtered_split
+
+		logger.info(f"Dataset đã xử lý xong: {dataset}")
+		return dataset["train"], dataset["validation"], dataset["test"]
+	except Exception as e:
+		logger.error(f"Lỗi trong quá trình chuẩn bị dữ liệu: {str(e)}")
+		raise
+
+def prepare_dataset_for_whisper(batch, processor: WhisperProcessor, logger: logging.Logger):
+	"""Chuẩn bị dataset cho Whisper."""
+	try:
+		audio_array, sampling_rate = librosa.load(batch["audio_path"], sr=16000)
+		
+		batch["input_features"] = processor(audio_array, sampling_rate=sampling_rate).input_features[0]
+		batch["labels"] = processor.tokenizer(batch["text"]).input_ids
+		return batch
+	except Exception as e:
+		logger.error(f"Lỗi khi xử lý file {batch.get('audio_path', 'UNKNOWN')}: {str(e)}")
+		return None
+
+# =================================================================================
+# Core Training Components
+# =================================================================================
+
+@dataclass
+class DataCollatorSpeechSeq2SeqWithPadding:
+	processor: Any
+	def __call__(self, features: List[Dict[str, Union[List[int], torch.Tensor]]]) -> Dict[str, torch.Tensor]:
+		input_features = [{"input_features": feature["input_features"]} for feature in features]
+		batch = self.processor.feature_extractor.pad(input_features, return_tensors="pt")
+		
+		label_features = [{"input_ids": feature["labels"]} for feature in features]
+		labels_batch = self.processor.tokenizer.pad(label_features, return_tensors="pt")
+		
+		labels = labels_batch["input_ids"].masked_fill(labels_batch.attention_mask.ne(1), -100)
+		
+		if (labels[:, 0] == self.processor.tokenizer.bos_token_id).all().cpu().item():
+			labels = labels[:, 1:]
+			
+		batch["labels"] = labels
+		return batch
+
+def setup_training_components(config: TrainingConfig, logger: logging.Logger):
+	"""Thiết lập model, processor, và metrics."""
+	try:
+		device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+		logger.info(f"Sử dụng device: {device}")
+		
+		processor = WhisperProcessor.from_pretrained(config.model_id, language="vi", task="transcribe")
+		
+		quantization_config = BitsAndBytesConfig(
+			load_in_4bit=True,
+			bnb_4bit_compute_dtype=torch.float16,
+			bnb_4bit_use_double_quant=True,
+			bnb_4bit_quant_type="nf4",
+		)
+		
+		model = WhisperForConditionalGeneration.from_pretrained(
+			config.model_id,
+			use_cache=False,
+			device_map="auto",
+			quantization_config=quantization_config,
+		)
+		model.config.forced_decoder_ids = processor.get_decoder_prompt_ids(language="vi", task="transcribe")
+		model.config.suppress_tokens = []
+		
+		model = peft.prepare_model_for_kbit_training(model, use_gradient_checkpointing=config.gradient_checkpointing)
+		lora_config = peft.LoraConfig(
+			r=4,
+			lora_alpha=8,
+			target_modules=["q_proj", "v_proj"],
+			lora_dropout=0.05,
+			bias="none",
+		)
+		model = peft.get_peft_model(model, lora_config)
+		model.print_trainable_parameters()
+
+		metric = evaluate.load("wer")
+		
+		def compute_metrics(pred):
+			pred_ids = pred.predictions
+			label_ids = pred.label_ids
+			label_ids[label_ids == -100] = processor.tokenizer.pad_token_id
+			
+			pred_str = processor.batch_decode(pred_ids, skip_special_tokens=True)
+			label_str = processor.batch_decode(label_ids, skip_special_tokens=True)
+			
+			wer = 100 * metric.compute(predictions=pred_str, references=label_str)
+			return {"wer": wer}
+			
+		return processor, model, compute_metrics
+	except Exception as e:
+		logger.error(f"Lỗi khi thiết lập các thành phần training: {str(e)}")
+		raise
+
+# =================================================================================
+# Main Training Function
+# =================================================================================
+
+def main():
+	config = TrainingConfig()
+	logger = setup_logging(config)
+	
+	try:
+		load_dotenv("./configs/.env")
+		
+		hf_token = os.getenv("HF_TOKEN")
+		if not hf_token: raise ValueError("HF_TOKEN không tìm thấy trong file .env")
+		login(token=hf_token)
+		logger.info("Đăng nhập Hugging Face Hub thành công")
+		
+		wandb_api_key = os.getenv("WANDB_API_KEY")
+		if not wandb_api_key: raise ValueError("WANDB_API_KEY không tìm thấy trong file .env")
+		wandb.login(key=wandb_api_key)
+		logger.info("Đăng nhập Weights & Biases thành công")
+		
+		wandb.init(project=config.project_name, name=config.run_name, config=vars(config))
+		
+		os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+		torch.cuda.empty_cache()
+
+		logger.info("Bắt đầu tải và chuẩn bị dữ liệu...")
+		train_dataset, valid_dataset, test_dataset = load_and_prepare_data(config, logger)
+		logger.info("Hoàn tất tải và chuẩn bị dữ liệu.")
+		
+		processor, model, compute_metrics = setup_training_components(config, logger)
+		
+		data_collator = DataCollatorSpeechSeq2SeqWithPadding(processor=processor)
+		
+		logger.info("Bắt đầu map dataset cho Whisper...")
+		map_fn = lambda batch: prepare_dataset_for_whisper(batch, processor, logger)
+		
+		train_dataset = train_dataset.map(map_fn, num_proc=2, batch_size=16).filter(lambda x: x is not None)
+		valid_dataset = valid_dataset.map(map_fn, num_proc=2, batch_size=16).filter(lambda x: x is not None)
+		test_dataset = test_dataset.map(map_fn, num_proc=2, batch_size=16).filter(lambda x: x is not None)
+		logger.info("Hoàn tất map dataset.")
+		
+		training_args = Seq2SeqTrainingArguments(
+			output_dir=config.output_dir,
+			per_device_train_batch_size=config.per_device_train_batch_size,
+			gradient_accumulation_steps=config.gradient_accumulation_steps,
+			learning_rate=config.learning_rate,
+			warmup_steps=config.warmup_steps,
+			num_train_epochs=config.num_train_epochs,
+			save_total_limit=config.save_total_limit,
+			gradient_checkpointing=config.gradient_checkpointing,
+			fp16=config.fp16,
+			evaluation_strategy="steps",
+			optim="adamw_bnb_8bit",
+			per_device_eval_batch_size=config.per_device_train_batch_size,
+			save_steps=config.save_steps,
+			eval_steps=config.eval_steps,
+			logging_steps=config.logging_steps,
+			load_best_model_at_end=True,
+			metric_for_best_model="wer",
+			greater_is_better=False,
+			push_to_hub=True,
+			remove_unused_columns=False,
+			hub_model_id=config.hub_model_id,
+			report_to=["wandb"],
+		)
+		
+		trainer = Seq2SeqTrainer(
+			model=model,
+			args=training_args,
+			train_dataset=train_dataset,
+			eval_dataset=valid_dataset,
+			data_collator=data_collator,
+			compute_metrics=compute_metrics,
+			callbacks=[WandbCallback()],
+		)
+		
+		logger.info("Bắt đầu training...")
+		trainer.train()
+		logger.info("Training hoàn tất.")
+		
+		logger.info("Đánh giá trên tập test...")
+		test_results = trainer.evaluate(eval_dataset=test_dataset)
+		wandb.log({"test_wer": test_results["eval_wer"]})
+		logger.info(f"Kết quả đánh giá trên tập test: {test_results}")
+		
+		wer_history_path = os.path.join(config.output_dir, "phowhisper_large_vovinam_finetuned_wer_history.json")
+		with open(wer_history_path, "w") as f:
+			json.dump(trainer.state.log_history, f)
+		
+		os.makedirs(config.model_save_dir, exist_ok=True)
+		trainer.save_model(config.model_save_dir)
+		processor.save_pretrained(config.model_save_dir)
+		
+		trainer.push_to_hub(
+			commit_message="Fine-tuned PhoWhisper-large on VoviAI Dataset",
+			tags=["speech-recognition", "vietnamese", "vovinam", "phowhisper"],
+			dataset=config.dataset_id,
+			language="vi",
+			finetuned_from=config.model_id,
+			tasks="automatic-speech-recognition",
+		)
+		processor.push_to_hub(config.hub_model_id, commit_message="Update processor for PhoWhisper-large VoviAI finetune")
+		
+		logger.info("Model và processor đã được lưu và đẩy lên Hugging Face Hub.")
+		
+		wandb.finish()
+		
+	except Exception as e:
+		logger.error(f"Training thất bại: {str(e)}", exc_info=True)
+		if wandb.run:
+			wandb.finish()
+		raise
+
+if __name__ == "__main__":
+	main()
