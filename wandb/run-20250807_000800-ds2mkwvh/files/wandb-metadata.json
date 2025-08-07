@@ -1,0 +1,38 @@
+{
+  "os":  "Linux-5.10.0-34-cloud-amd64-x86_64-with-glibc2.31",
+  "python":  "CPython 3.10.17",
+  "startedAt":  "2025-08-07T00:08:00.418595Z",
+  "program":  "-m train.phowhisper_large_vi_all",
+  "git":  {
+    "remote":  "https://github.com/minhtien2405/VNFPTU-ASR.git",
+    "commit":  "4a99cd522debc0fc846fe574300fbcae86de2b53"
+  },
+  "email":  "phamminhtien2405@gmail.com",
+  "root":  "/home/phamminhtien2405/VNFPTU-ASR",
+  "host":  "vovinam-ai-l4",
+  "executable":  "/home/phamminhtien2405/VNFPTU-ASR/.venv/bin/python",
+  "cpu_count":  8,
+  "cpu_count_logical":  16,
+  "gpu":  "NVIDIA L4",
+  "gpu_count":  1,
+  "disk":  {
+    "/":  {
+      "total":  "739553361920",
+      "used":  "292176240640"
+    }
+  },
+  "memory":  {
+    "total":  "67441483776"
+  },
+  "gpu_nvidia":  [
+    {
+      "name":  "NVIDIA L4",
+      "memoryTotal":  "24152899584",
+      "cudaCores":  7424,
+      "architecture":  "Ada",
+      "uuid":  "GPU-ed3f7f9b-0832-7ab7-7c9b-52e29678e8b9"
+    }
+  ],
+  "cudaVersion":  "12.4",
+  "writerId":  "b65baydhau5btugea8c9yqx06vzjpff9"
+}
