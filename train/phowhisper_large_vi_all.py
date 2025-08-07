@@ -231,7 +231,7 @@ training_args = Seq2SeqTrainingArguments(
     per_device_eval_batch_size=4,
     save_steps=200,
     # eval_steps=100,
-    num_train_epochs=10,
+    num_train_epochs=5,
     save_total_limit=3,
     logging_steps=200,
     # load_best_model_at_end=True,
@@ -265,7 +265,7 @@ with mlflow.start_run(run_name="phowhisper_finetune_all_vi"):
         callbacks=[MLflowCallback()],
     )
 
-    trainer.train()  # resume_from_checkpoint=True)
+    trainer.train(resume_from_checkpoint=True)
     logging.info("Training completed.")
 
     try:
