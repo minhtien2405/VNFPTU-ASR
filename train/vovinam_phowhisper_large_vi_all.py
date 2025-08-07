@@ -271,9 +271,9 @@ def main():
 		logger.info("Bắt đầu map dataset cho Whisper...")
 		map_fn = lambda batch: prepare_dataset_for_whisper(batch, processor, logger)
 		
-		train_dataset = train_dataset.map(map_fn, num_proc=2, batch_size=16).filter(lambda x: x is not None)
-		valid_dataset = valid_dataset.map(map_fn, num_proc=2, batch_size=16).filter(lambda x: x is not None)
-		test_dataset = test_dataset.map(map_fn, num_proc=2, batch_size=16).filter(lambda x: x is not None)
+		train_dataset = train_dataset.map(map_fn, num_proc=1, batch_size=16).filter(lambda x: x is not None)
+		valid_dataset = valid_dataset.map(map_fn, num_proc=1, batch_size=16).filter(lambda x: x is not None)
+		test_dataset = test_dataset.map(map_fn, num_proc=1, batch_size=16).filter(lambda x: x is not None)
 		logger.info("Hoàn tất map dataset.")
 		
 		training_args = Seq2SeqTrainingArguments(
