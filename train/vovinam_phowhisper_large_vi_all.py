@@ -140,23 +140,23 @@ def download_audio_from_s3(url: str, cache_dir: str = "./audio_cache") -> Option
             os.remove(temp_path)
         return None
 
-def load_audio_from_path(audio_path: str, target_sr: int = 16000) -> Optional[Dict]:
-	"""Load audio from local path and return audio dict."""
-	try:
-		if not os.path.exists(audio_path):
-			return None
+# def load_audio_from_path(audio_path: str, target_sr: int = 16000) -> Optional[Dict]:
+# 	"""Load audio from local path and return audio dict."""
+# 	try:
+# 		if not os.path.exists(audio_path):
+# 			return None
 			
-		# Load audio using librosa
-		audio_array, sr = librosa.load(audio_path, sr=target_sr)
+# 		# Load audio using librosa
+# 		audio_array, sr = librosa.load(audio_path, sr=target_sr)
 		
-		return {
-			"array": audio_array,
-			"sampling_rate": target_sr,
-			"path": audio_path
-		}
-	except Exception as e:
-		logging.getLogger(__name__).error(f"Error loading audio from {audio_path}: {str(e)}")
-		return None
+# 		return {
+# 			"array": audio_array,
+# 			"sampling_rate": target_sr,
+# 			"path": audio_path
+# 		}
+# 	except Exception as e:
+# 		logging.getLogger(__name__).error(f"Error loading audio from {audio_path}: {str(e)}")
+# 		return None
 
 def validate_audio(sample, logger: logging.Logger) -> bool:
 	"""Validate audio sample for non-empty and valid format."""
@@ -408,11 +408,31 @@ def main():
 		data_collator = DataCollatorSpeechSeq2SeqWithPadding(processor=processor)
 		
 		logger.info("Bắt đầu map dataset cho Whisper...")
-		map_fn = lambda batch: prepare_dataset_for_whisper(batch, processor, logger)
-		
-		train_dataset = train_dataset.map(map_fn, num_proc=1, batch_size=16).filter(lambda x: x is not None)
-		valid_dataset = valid_dataset.map(map_fn, num_proc=1, batch_size=16).filter(lambda x: x is not None)
-		test_dataset = test_dataset.map(map_fn, num_proc=1, batch_size=16).filter(lambda x: x is not None)
+		train_dataset = train_dataset.map(
+			lambda batch: prepare_dataset_for_whisper(batch, processor, logger),
+			# remove_columns=train_dataset.column_names,
+			num_proc=1,
+			keep_in_memory=False,
+			batch_size=16,
+			desc="Mapping train dataset for Whisper",
+		).filter(lambda x: x is not None)
+		valid_dataset = valid_dataset.map(
+			lambda batch: prepare_dataset_for_whisper(batch, processor, logger),
+			# remove_columns=valid_dataset.column_names,
+			num_proc=1,
+			keep_in_memory=False,
+			batch_size=16,
+			desc="Mapping validation dataset for Whisper",
+		).filter(lambda x: x is not None)
+		test_dataset = test_dataset.map(
+			lambda batch: prepare_dataset_for_whisper(batch, processor, logger),
+			# remove_columns=test_dataset.column_names,
+			num_proc=1,
+			keep_in_memory=False,
+			batch_size=16,
+			desc="Mapping test dataset for Whisper",
+		).filter(lambda x: x is not None)
+
 		logger.info("Hoàn tất map dataset.")
 		
 		training_args = Seq2SeqTrainingArguments(
