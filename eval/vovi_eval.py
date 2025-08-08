@@ -152,6 +152,13 @@ def main():
         logger.error("Evaluation failed. Could not retrieve WER score.")
         print("Evaluation failed. Check evaluation.log for details.")
 
+    # save the evaluation results
+    os.makedirs(config.log_dir, exist_ok=True)
+    results_file = os.path.join(config.log_dir, "evaluation_results.txt")
+    with open(results_file, "w") as f:
+        f.write(f"Word Error Rate (WER): {wer_score:.4f} ({wer_score*100:.2f}%)\n")
+    logger.info(f"Evaluation results saved to {results_file}")
+    print(f"Evaluation results saved to {results_file}")
 
 if __name__ == "__main__":
     main()
