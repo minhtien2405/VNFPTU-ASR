@@ -26,7 +26,8 @@ logs/phowhisper-large-south-vi/
 logs/*
 
 # MLflow
-mlruns/
+mlruns/*
+wandb/*
 
 # Models
 models/
