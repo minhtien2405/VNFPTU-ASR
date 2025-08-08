@@ -44,6 +44,8 @@ JIWER_TRANS = jiwer.Compose(
 
 def normalize_text(text):
     """Hàm chuẩn hóa văn bản đơn giản."""
+    if not isinstance(text, str):
+        return ""
     text = text.lower()
     # Xóa các ký tự không phải chữ cái, số, hoặc khoảng trắng
     text = re.sub(r"[^\w\s]", "", text)
@@ -64,9 +66,9 @@ def load_data(dataset_id, split):
 
     # Lọc các mẫu có độ dài audio > 30 giây để tránh lỗi OOM
     initial_count = len(dataset)
-    dataset = dataset.filter(lambda x: len(x["audio"]["array"]) <= 30 * 16000, num_proc=4)
+    dataset = dataset.filter(lambda x: x["audio"] is not None and len(x["audio"]["array"]) <= 30 * 16000, num_proc=4)
     filtered_count = len(dataset)
-    logging.info(f"Đã lọc các mẫu > 30s. Giữ lại {filtered_count}/{initial_count} mẫu.")
+    logging.info(f"Đã lọc các mẫu > 30s hoặc audio rỗng. Giữ lại {filtered_count}/{initial_count} mẫu.")
     
     # Chuẩn hóa cột text
     dataset = dataset.map(lambda x: {"text": normalize_text(x["text"])}, num_proc=4)
@@ -87,7 +89,9 @@ def evaluate(dataset, model, processor, device):
         
         try:
             # Chuẩn bị audio input
-            audio_inputs = [sample["audio"]["array"] for sample in batch]
+            # Dòng này đã được sửa lại cho đúng
+            audio_inputs = [audio_sample["array"] for audio_sample in batch["audio"]]
+            
             inputs = processor(
                 audio_inputs, sampling_rate=16000, return_tensors="pt", padding=True
             )
@@ -234,7 +238,7 @@ def main():
     evaluation_results = evaluate(dataset, model, processor, device)
     
     # Lưu kết quả
-    output_filename = os.path.join(LOG_DIR, "results_wav2vec2_160h_vimd_test.txt")
+    output_filename = os.path.join(LOG_DIR, "results_wav2vec2_vimd_test.txt")
     save_results(evaluation_results, output_filename)
 
     logging.info("Script đánh giá đã hoàn thành.")
