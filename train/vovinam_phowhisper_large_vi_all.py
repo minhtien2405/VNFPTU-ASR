@@ -287,7 +287,10 @@ def load_and_prepare_data(config: TrainingConfig, logger: logging.Logger):
 def prepare_dataset_for_whisper(batch, processor: WhisperProcessor, logger: logging.Logger):
 	try:
 		audio_array, sampling_rate = librosa.load(batch["audio_path"], sr=16000)
-
+		logger.info(f"Loaded audio from {batch['audio_path']} with shape {audio_array.shape} and sampling rate {sampling_rate}")
+		if audio_array is None or len(audio_array) == 0:
+			logger.error(f"Empty audio array for file {batch['audio_path']}")
+			return None
 		batch["input_features"] = processor(audio_array, sampling_rate=sampling_rate).input_values[0]
 		batch["labels"] = processor.tokenizer(batch["text"]).input_ids
 		return batch
