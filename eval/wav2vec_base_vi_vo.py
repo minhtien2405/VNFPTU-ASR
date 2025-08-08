@@ -9,7 +9,7 @@ from tqdm import tqdm
 from transformers import Wav2Vec2ForCTC, Wav2Vec2Processor
 
 # --- CẤU HÌNH ---
-MODEL_ID = "minhtien2405/wav2vec2-base-vi-160h-finetuned"
+MODEL_ID = "minhtien2405/wav2vec2-base-vi"
 DATASET_ID = "nguyendv02/ViMD_Dataset"
 DATASET_SPLIT = "test"
 BATCH_SIZE = 8  # Giảm nếu gặp lỗi hết bộ nhớ (Out of Memory)
