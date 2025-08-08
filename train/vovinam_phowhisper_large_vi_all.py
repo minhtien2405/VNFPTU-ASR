@@ -335,30 +335,58 @@ def load_and_prepare_data(config: TrainingConfig, logger: logging.Logger):
 
 def prepare_dataset_for_whisper(batch, processor: WhisperProcessor, logger: logging.Logger):
 	try:
-		audio_array, sampling_rate = librosa.load(batch["audio_path"], sr=16000)
-		logger.info(f"Loaded audio from {batch['audio_path']} with shape {audio_array.shape} and sampling rate {sampling_rate}")
+		audio_path = batch.get("audio_path")
+		if not audio_path or not os.path.exists(audio_path):
+			logger.error(f"Invalid or missing audio path: {audio_path}")
+			# Return a dictionary with success flag instead of None
+			return {**batch, "processing_success": False}
+		
+		audio_array, sampling_rate = librosa.load(audio_path, sr=16000)
+		logger.info(f"Loaded audio from {audio_path} with shape {audio_array.shape} and sampling rate {sampling_rate}")
+		
 		if audio_array is None or len(audio_array) == 0:
-			logger.error(f"Empty audio array for file {batch['audio_path']}")
-			return None
-		batch["input_features"] = processor(audio_array, sampling_rate=sampling_rate).input_values[0]
-		batch["labels"] = processor.tokenizer(batch["text"]).input_ids
-		return batch
+			logger.error(f"Empty audio array for file {audio_path}")
+			return {**batch, "processing_success": False}
+		
+		# Process audio features
+		input_features = processor(audio_array, sampling_rate=sampling_rate, return_tensors="pt").input_features[0]
+		
+		# Process text labels
+		labels = processor.tokenizer(batch["text"], return_tensors="pt").input_ids[0]
+		
+		# Return processed batch with success flag
+		return {
+			**batch,
+			"input_features": input_features,
+			"labels": labels,
+			"processing_success": True
+		}
 	except Exception as e:
 		logger.error(f"Error processing file {batch.get('audio_path', 'UNKNOWN')}: {str(e)}")
-		return None
+		return {**batch, "processing_success": False}
 
 # =================================================================================
 # Core Training Components
 # =================================================================================
-
 @dataclass
 class DataCollatorSpeechSeq2SeqWithPadding:
 	processor: Any
 	def __call__(self, features: List[Dict[str, Union[List[int], torch.Tensor]]]) -> Dict[str, torch.Tensor]:
-		input_features = [{"input_features": feature["input_features"]} for feature in features]
+		# FIX 2: Add validation to ensure all features have required keys
+		valid_features = []
+		for feature in features:
+			if "input_features" in feature and "labels" in feature:
+				valid_features.append(feature)
+			else:
+				logger.warning(f"Skipping invalid feature without required keys. Available keys: {list(feature.keys())}")
+		
+		if not valid_features:
+			raise ValueError("No valid features found for batch processing")
+		
+		input_features = [{"input_features": feature["input_features"]} for feature in valid_features]
 		batch = self.processor.feature_extractor.pad(input_features, return_tensors="pt")
 		
-		label_features = [{"input_ids": feature["labels"]} for feature in features]
+		label_features = [{"input_ids": feature["labels"]} for feature in valid_features]
 		labels_batch = self.processor.tokenizer.pad(label_features, return_tensors="pt")
 		
 		labels = labels_batch["input_ids"].masked_fill(labels_batch.attention_mask.ne(1), -100)
