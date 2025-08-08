@@ -30,13 +30,13 @@ os.environ["PYARROW_WITH_INT64"] = "1"
 
 @dataclass
 class TrainingConfig:
-	model_id: str = "minhtien2405/wav2vec2-base-vi"
-	hub_model_id: str = "minhtien2405/vovinam-wav2vec2-base-vi"
+	model_id: str = "minhtien2405/wav2vec2-base-vi-160h-finetuned"
+	hub_model_id: str = "minhtien2405/vovinam-wav2vec2-base-vi-160h-finetuned"
 	dataset_id: str = "minhtien2405/VoviAIDataset"
-	output_dir: str = "./logs/vovinam_wav2vec2-base-vi"
+	output_dir: str = "./logs/vovinam_wav2vec2-base-vi-160h_finetuned"
 	cache_dir: str = "./cache"
 	log_dir: str = "./logs"
-	model_save_dir: str = "./models/vovinam_wav2vec2-base-vi"
+	model_save_dir: str = "./models/vovinam_wav2vec2-base-vi-160h_finetuned"
 	per_device_train_batch_size: int = 4
 	gradient_accumulation_steps: int = 8
 	learning_rate: float = 3e-4
@@ -47,13 +47,13 @@ class TrainingConfig:
 	logging_steps: int = 50
 	save_total_limit: int = 3
 	fp16: bool = True
-	project_name: str = "Vovinam_Wav2Vec2_All_VoviAI_FPTU"
-	run_name: str = f"vovinam_wav2vec2_finetune_voviai_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+	project_name: str = "Vovinam_Wav2Vec2_All_160h_VoviAI_FPTU"
+	run_name: str = f"vovinam_wav2vec2_160h_finetune_voviai_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
 def setup_logging(config: TrainingConfig) -> logging.Logger:
 	os.makedirs(config.log_dir, exist_ok=True)
 	logging.basicConfig(
-		filename=os.path.join(config.log_dir, "vovinam_wav2vec_base_voviai_v0.log"),
+		filename=os.path.join(config.log_dir, "vovinam_wav2vec2_160h_voviai_v0.log"),
 		level=logging.INFO,
 		format="%(asctime)s - %(levelname)s - %(message)s",
 		datefmt="%Y-%m-%d %H:%M:%S",
@@ -465,7 +465,7 @@ def main():
 			for log in trainer.state.log_history
 			if "eval_wer" in log
 		]
-		wer_history_path = os.path.join(config.output_dir, "vovinam_wav2vec2_base_vi_250hfinetuned_wer_history.json")
+		wer_history_path = os.path.join(config.output_dir, "vovinam_wav2vec2_base_vi_160hfinetuned_wer_history.json")
 		with open(wer_history_path, "w") as f:
 			json.dump(wer_history, f)
 		
@@ -478,7 +478,7 @@ def main():
 		processor.save_pretrained(config.model_save_dir)
 		
 		trainer.push_to_hub(
-			commit_message="Fine-tuned Wav2Vec2_250h on VoviAI Dataset with layer freezing",
+			commit_message="Fine-tuned Wav2Vec2_160h on VoviAI Dataset with layer freezing",
 			tags=["speech-recognition", "vietnamese", "vietnam", "voviai", "vovinam"],
 			dataset=config.dataset_id,
 			language="vi",
