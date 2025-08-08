@@ -553,14 +553,14 @@ def main():
 
 		torch.cuda.empty_cache()
 		
-		logger.info("Đánh giá trên tập test...")
-		test_results = trainer.evaluate(eval_dataset=test_dataset)
-		wandb.log({"test_wer": test_results["eval_wer"]})
-		logger.info(f"Kết quả đánh giá trên tập test: {test_results}")
+		# logger.info("Đánh giá trên tập test...")
+		# test_results = trainer.evaluate(eval_dataset=test_dataset)
+		# wandb.log({"test_wer": test_results["eval_wer"]})
+		# logger.info(f"Kết quả đánh giá trên tập test: {test_results}")
 		
-		wer_history_path = os.path.join(config.output_dir, "phowhisper_large_vovinam_finetuned_wer_history.json")
-		with open(wer_history_path, "w") as f:
-			json.dump(trainer.state.log_history, f)
+		# wer_history_path = os.path.join(config.output_dir, "phowhisper_large_vovinam_finetuned_wer_history.json")
+		# with open(wer_history_path, "w") as f:
+		# 	json.dump(trainer.state.log_history, f)
 		
 		os.makedirs(config.model_save_dir, exist_ok=True)
 		trainer.save_model(config.model_save_dir)
