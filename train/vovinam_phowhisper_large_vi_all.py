@@ -26,6 +26,8 @@ from transformers import (
 )
 import re
 import requests
+import time
+
 
 
 # =================================================================================
@@ -91,54 +93,94 @@ class WandbCallback(TrainerCallback):
 		if "eval_wer" in metrics:
 			wandb.log({"eval_wer": metrics["eval_wer"], "step": state.global_step})
 
-def download_audio_from_s3(url: str, cache_dir: str = "./audio_cache") -> Optional[str]:
-    """Download audio file from S3 URL and return local path, preserving original extension."""
+def download_audio_from_s3(
+    url: str,
+    cache_dir: str = "./audio_cache",
+    max_retries: int = 3,
+    base_delay: float = 1.0,
+    politeness_delay: float = 0.1
+) -> Optional[str]:
+    """
+    Tải file âm thanh từ URL với cơ chế thử lại và thời gian nghỉ.
+
+    Args:
+        url (str): URL của file cần tải.
+        cache_dir (str): Thư mục lưu file.
+        max_retries (int): Số lần thử lại tối đa nếu gặp lỗi.
+        base_delay (float): Thời gian nghỉ cơ bản (giây) trước khi thử lại.
+        politeness_delay (float): Thời gian nghỉ ngắn trước mỗi lần tải mới để tránh spam.
+
+    Returns:
+        Optional[str]: Đường dẫn tới file đã tải hoặc None nếu thất bại.
+    """
     try:
         os.makedirs(cache_dir, exist_ok=True)
-        
-        # Use the filename directly from the URL, which is correct (e.g., ends with .aac)
-        if '/' in url:
-            filename = url.split('/')[-1]
-        else:
-            # Fallback for unusual URLs
-            filename = f"{hash(url)}.audio" 
-
+        if not url:
+            logger.warning("URL rỗng được cung cấp, bỏ qua.")
+            return None
+            
+        filename = url.split('/')[-1]
         local_path = os.path.join(cache_dir, filename)
-        
-        # Check if file already exists and is valid
+        temp_path = local_path + '.tmp'
+
+        # 1. Kiểm tra cache trước tiên để tiết kiệm băng thông
         if os.path.exists(local_path) and os.path.getsize(local_path) > 0:
             return local_path
-            
-        # Download the file
+
+        # 2. Thêm thời gian nghỉ ngắn trước mỗi lần tải mới
+        time.sleep(politeness_delay)
+
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36'
         }
-        response = requests.get(url, stream=True, timeout=60, headers=headers)
-        response.raise_for_status()
-        
-        # Write file with temporary name first, then rename (atomic operation)
-        temp_path = local_path + '.tmp'
-        with open(temp_path, 'wb') as f:
-            for chunk in response.iter_content(chunk_size=8192):
-                if chunk:  # filter out keep-alive chunks
-                    f.write(chunk)
-        
-        os.rename(temp_path, local_path)
-        
-        # Verify file was downloaded correctly
-        if os.path.getsize(local_path) == 0:
-            os.remove(local_path)
-            raise ValueError("Downloaded file is empty")
-            
-        return local_path
+
+        # 3. Vòng lặp thử lại (Retry Loop)
+        for attempt in range(max_retries):
+            try:
+                response = requests.get(url, stream=True, timeout=30, headers=headers)
+                response.raise_for_status()  # Báo lỗi cho các status 4xx/5xx
+
+                # Ghi vào file tạm
+                with open(temp_path, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        f.write(chunk)
+                
+                # Kiểm tra file tải về không bị rỗng
+                if os.path.getsize(temp_path) > 0:
+                    os.rename(temp_path, local_path)
+                    return local_path
+                else:
+                    logger.warning(f"Tải về file rỗng từ URL: {url}")
+                    os.remove(temp_path)
+                    return None # Thất bại, không cần thử lại
+
+            except (requests.exceptions.RequestException, requests.exceptions.HTTPError) as e:
+                # Chỉ thử lại với các lỗi mạng hoặc lỗi server tạm thời
+                is_server_error = isinstance(e, requests.exceptions.HTTPError) and 500 <= e.response.status_code < 600
+                is_connection_error = isinstance(e, requests.exceptions.RequestException)
+
+                if (is_server_error or is_connection_error) and attempt < max_retries - 1:
+                    delay = base_delay * (2 ** attempt)  # Tăng thời gian nghỉ theo cấp số nhân
+                    logger.warning(
+                        f"Lần thử {attempt + 1}/{max_retries} thất bại khi tải {url}. "
+                        f"Thử lại sau {delay:.1f} giây. Lỗi: {e}"
+                    )
+                    time.sleep(delay)
+                else:
+                    logger.error(f"Không thể tải file từ {url} sau {max_retries} lần thử. Lỗi cuối cùng: {e}")
+                    if os.path.exists(temp_path):
+                        os.remove(temp_path)
+                    return None # Thất bại hoàn toàn
+
     except Exception as e:
-        logger = logging.getLogger(__name__)
-        logger.error(f"Error downloading audio from {url}: {str(e)}")
-        # Clean up temp file if it exists
-        temp_path = os.path.join(cache_dir, filename + '.tmp') if 'filename' in locals() else None
-        if temp_path and os.path.exists(temp_path):
+        logger.error(f"Lỗi không mong muốn trong hàm download_audio_from_s3: {e}")
+        # Dọn dẹp file tạm nếu có
+        temp_path = os.path.join(cache_dir, url.split('/')[-1] + '.tmp')
+        if os.path.exists(temp_path):
             os.remove(temp_path)
         return None
+
+    return None
 
 # def load_audio_from_path(audio_path: str, target_sr: int = 16000) -> Optional[Dict]:
 # 	"""Load audio from local path and return audio dict."""
@@ -220,69 +262,74 @@ def normalize_text(text: str) -> str:
 
 
 def load_and_prepare_data(config: TrainingConfig, logger: logging.Logger):
-    """
-    Load and preprocess dataset efficiently, preparing audio_path for explicit loading later.
-    """
-    try:
-        os.environ["HF_DATASETS_CACHE"] = config.cache_dir
-        logger.info(f"Loading dataset from Hugging Face Hub: {config.dataset_id}")
-        dataset = load_dataset(config.dataset_id, cache_dir=config.cache_dir)
-        logger.info(f"Initial dataset structure: {dataset}")
+	"""
+	Load and preprocess dataset efficiently, preparing audio_path for explicit loading later.
+	"""
+	try:
+		os.environ["HF_DATASETS_CACHE"] = config.cache_dir
+		logger.info(f"Loading dataset from Hugging Face Hub: {config.dataset_id}")
+		dataset = load_dataset(config.dataset_id, cache_dir=config.cache_dir)
+		logger.info(f"Initial dataset structure: {dataset}")
 
-        def download_and_prepare_sample(sample):
-            sample["is_valid"] = True
-            audio_path = download_audio_from_s3(sample["audioLink"], cache_dir=os.path.join(config.cache_dir, "audio"))
-            if not audio_path:
-                logger.warning(f"Failed to download audio, skipping. URL: {sample['audioLink']}")
-                sample["is_valid"] = False
-                return sample
-            sample["audio_path"] = audio_path
+		def download_and_prepare_sample(sample):
+			sample["is_valid"] = True
+			audio_path = download_audio_from_s3(sample["audioLink"], cache_dir=os.path.join(config.cache_dir, "audio"))
 
-            try:
-                duration = librosa.get_duration(path=audio_path)
-                if duration < 0.1 or duration > 30:
-                    logger.warning(f"Invalid duration ({duration:.2f}s), skipping. Path: {audio_path}")
-                    sample["is_valid"] = False
-            except Exception as e:
-                logger.warning(f"Could not get duration, skipping. Path: {audio_path}, Error: {e}")
-                sample["is_valid"] = False
-            if not sample["is_valid"]: return sample
+			if not audio_path:
+				logger.warning(f"Failed to download audio, skipping. URL: {sample['audioLink']}")
+				sample["is_valid"] = False
+				sample["audio_path"] = None  # SỬA LỖI: Luôn thêm key 'audio_path' với giá trị None
+				return sample              # Bây giờ return mới an toàn
 
-            text = sample.get("text", "")
-            normalized_text = normalize_text(text)
-            if not normalized_text or len(normalized_text.strip()) < 2:
-                logger.warning(f"Invalid or empty text ('{text}'), skipping. Path: {audio_path}")
-                sample["is_valid"] = False
-            sample["text"] = normalized_text
-            return sample
+			sample["audio_path"] = audio_path
 
-        for split in dataset.keys():
-            logger.info(f"Processing '{split}' split...")
-            processed_split = dataset[split].map(
-                download_and_prepare_sample, num_proc=4, desc=f"Downloading and validating {split} data"
-            )
-            original_size = len(processed_split)
-            filtered_split = processed_split.filter(
-                lambda sample: sample["is_valid"], num_proc=4, desc=f"Filtering invalid samples in {split} split"
-            )
-            filtered_size = len(filtered_split)
-            logger.info(f"Filtered {split} split: {original_size} -> {filtered_size} samples.")
-            if filtered_size == 0 and original_size > 0:
-                raise ValueError(f"No valid samples remained in '{split}' split after filtering. Check logs for warnings.")
+			try:
+				duration = librosa.get_duration(path=audio_path)
+				if duration < 0.1 or duration > 30:
+					logger.warning(f"Invalid duration ({duration:.2f}s), skipping. Path: {audio_path}")
+					sample["is_valid"] = False
+			except Exception as e:
+				logger.warning(f"Could not get duration, skipping. Path: {audio_path}, Error: {e}")
+				sample["is_valid"] = False
 
-            # THAY ĐỔI QUAN TRỌNG: BỎ cast_column và xóa các cột không cần thiết
-            # Chúng ta sẽ giữ lại 'audio_path' để dùng ở bước sau.
-            columns_to_remove = [col for col in ["audio", "audioLink", "is_valid", "__index_level_0__"] if col in filtered_split.column_names]
-            if columns_to_remove:
-                filtered_split = filtered_split.remove_columns(columns_to_remove)
-            
-            dataset[split] = filtered_split
+			# Chỉ kiểm tra text nếu các bước trên thành công
+			if sample["is_valid"]:
+				text = sample.get("text", "")
+				normalized_text = normalize_text(text)
+				if not normalized_text or len(normalized_text.strip()) < 2:
+					logger.warning(f"Invalid or empty text ('{text}'), skipping. Path: {audio_path}")
+					sample["is_valid"] = False
+				sample["text"] = normalized_text
+				
+			return sample
 
-        logger.info(f"Final processed dataset: {dataset}")
-        return dataset["train"], dataset["validation"], dataset["test"]
-    except Exception as e:
-        logger.error(f"Error during data preparation: {str(e)}")
-        raise
+		for split in dataset.keys():
+			logger.info(f"Processing '{split}' split...")
+			processed_split = dataset[split].map(
+				download_and_prepare_sample, num_proc=4, desc=f"Downloading and validating {split} data"
+			)
+			original_size = len(processed_split)
+			filtered_split = processed_split.filter(
+				lambda sample: sample["is_valid"], num_proc=4, desc=f"Filtering invalid samples in {split} split"
+			)
+			filtered_size = len(filtered_split)
+			logger.info(f"Filtered {split} split: {original_size} -> {filtered_size} samples.")
+			if filtered_size == 0 and original_size > 0:
+				raise ValueError(f"No valid samples remained in '{split}' split after filtering. Check logs for warnings.")
+
+			# THAY ĐỔI QUAN TRỌNG: BỎ cast_column và xóa các cột không cần thiết
+			# Chúng ta sẽ giữ lại 'audio_path' để dùng ở bước sau.
+			columns_to_remove = [col for col in ["audio", "audioLink", "is_valid", "__index_level_0__"] if col in filtered_split.column_names]
+			if columns_to_remove:
+				filtered_split = filtered_split.remove_columns(columns_to_remove)
+			
+			dataset[split] = filtered_split
+
+		logger.info(f"Final processed dataset: {dataset}")
+		return dataset["train"], dataset["validation"], dataset["test"]
+	except Exception as e:
+		logger.error(f"Error during data preparation: {str(e)}")
+		raise
 
 def prepare_dataset_for_whisper(batch, processor: WhisperProcessor, logger: logging.Logger):
 	try:
