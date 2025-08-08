@@ -548,8 +548,10 @@ def main():
 		)
 		
 		logger.info("Bắt đầu training...")
-		trainer.train()
+		trainer.train(resume_from_checkpoint=True)
 		logger.info("Training hoàn tất.")
+
+		torch.cuda.empty_cache()
 		
 		logger.info("Đánh giá trên tập test...")
 		test_results = trainer.evaluate(eval_dataset=test_dataset)
