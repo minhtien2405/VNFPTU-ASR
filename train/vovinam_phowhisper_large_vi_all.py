@@ -422,7 +422,7 @@ def main():
 			save_total_limit=config.save_total_limit,
 			gradient_checkpointing=config.gradient_checkpointing,
 			fp16=config.fp16,
-			evaluation_strategy="steps",
+			eval_strategy="steps",
 			optim="adamw_bnb_8bit",
 			per_device_eval_batch_size=config.per_device_train_batch_size,
 			save_steps=config.save_steps,
