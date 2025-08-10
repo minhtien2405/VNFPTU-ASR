@@ -43,9 +43,9 @@ class TrainingConfig:
     # Evaluation and Saving
     eval_strategy: str = "steps"
     eval_steps: int = 200
-    save_steps: int = 200
+    save_steps: int = 400
     save_total_limit: int = 3
-    logging_steps: int = 50
+    logging_steps: int = 200
     load_best_model_at_end: bool = True
     metric_for_best_model: str = "wer"
     greater_is_better: bool = False
