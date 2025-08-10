@@ -186,7 +186,7 @@ def setup_model_and_processor(config: TrainingConfig, logger: logging.Logger):
 
     logger.info("Áp dụng PEFT/LoRA cho model.")
     peft_model = peft.get_peft_model(
-        peft.prepare_model_for_kbit_training(model, gradient_checkpointing=config.gradient_checkpointing),
+        peft.prepare_model_for_kbit_training(model, use_gradient_checkpointing =config.gradient_checkpointing),
         peft.LoraConfig(
             r=32, lora_alpha=64, target_modules=["q_proj", "v_proj"], lora_dropout=0.05, bias="none"
         ),
