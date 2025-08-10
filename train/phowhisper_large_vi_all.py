@@ -1,11 +1,15 @@
 import os
 import torch
-from dataclasses import dataclass
+import json
+import logging
+import peft
+import accelerate
+import wandb
+from dataclasses import dataclass, asdict
 from typing import Any, Dict, List, Union
+from datetime import datetime
 from datasets import load_dataset, Audio
 import evaluate
-import mlflow
-import mlflow.pytorch
 from dotenv import load_dotenv
 from huggingface_hub import login
 from transformers import (
@@ -13,145 +17,47 @@ from transformers import (
     WhisperForConditionalGeneration,
     Seq2SeqTrainingArguments,
     Seq2SeqTrainer,
-    TrainerCallback,
     BitsAndBytesConfig,
 )
-import json
-import logging
-import peft
-import accelerate
 
-log_dir = os.getcwd() + "/logs"
-if not os.path.exists(log_dir):
-    os.makedirs(log_dir)
+# --- 1. Cấu hình Training ---
+@dataclass
+class TrainingConfig:
+    # Model and Hub
+    model_id: str = "vinai/PhoWhisper-large"
+    hub_model_id: str = "minhtien2405/phowhisper-large-all-vi"
+    # Dataset
+    dataset_id: str = "nguyendv02/ViMD_Dataset"
+    # Directories
+    output_dir: str = "./logs/phowhisper-large-all-vi"
+    cache_dir: str = "./cache"
+    log_dir: str = "./logs"
+    model_save_dir: str = "./models/phowhisper-large-all-vi"
+    # Training Hyperparameters
+    per_device_train_batch_size: int = 4
+    per_device_eval_batch_size: int = 1
+    gradient_accumulation_steps: int = 8
+    learning_rate: float = 1e-5
+    warmup_steps: int = 400
+    num_train_epochs: int = 30
+    # Evaluation and Saving
+    eval_strategy: str = "steps"
+    eval_steps: int = 200
+    save_steps: int = 200
+    save_total_limit: int = 3
+    logging_steps: int = 50
+    load_best_model_at_end: bool = True
+    metric_for_best_model: str = "wer"
+    greater_is_better: bool = False
+    # Technical
+    fp16: bool = True
+    optim: str = "adamw_bnb_8bit"
+    gradient_checkpointing: bool = True
+    # WandB
+    project_name: str = "PhoWhisper_ViMD_FPTU"
+    run_name: str = f"phowhisper-large-vi-all-{datetime.now().strftime('%Y%m%d-%H%M')}"
 
-logging.basicConfig(
-    filename=os.path.join(log_dir, "phowhisper_large_vi_all_v0.log"),
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-    force=True,
-)
-load_dotenv("./configs/.env")
-login(token=os.getenv("HF_TOKEN"))
-
-mlflow.set_experiment("PhoWhisper_ViMD_FPTU")
-
-cache_dir = os.getcwd() + "/cache"
-if not os.path.exists(cache_dir):
-    os.makedirs(cache_dir)
-os.environ["HF_DATASETS_CACHE"] = cache_dir
-os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
-torch.cuda.empty_cache()
-
-dataset = load_dataset("nguyendv02/ViMD_Dataset", cache_dir=cache_dir)
-
-train_dataset = dataset["train"].cast_column("audio", Audio(sampling_rate=16000))
-valid_dataset = dataset["valid"].cast_column("audio", Audio(sampling_rate=16000))
-
-num_of_long_audio = 0
-
-
-def filter_long_audio(example):
-    global num_of_long_audio
-    audio_length = (
-        example["audio"]["array"].shape[0] / example["audio"]["sampling_rate"]
-    )
-    if audio_length > 30:
-        num_of_long_audio += 1
-        logging.warning(
-            f"Audio {example['audio']['path']} is too long: {audio_length:.2f} seconds"
-        )
-    return audio_length <= 30
-
-
-logging.info(f"Number of long audio samples: {num_of_long_audio}")
-
-train_dataset = train_dataset.filter(filter_long_audio, num_proc=3)
-valid_dataset = valid_dataset.filter(filter_long_audio, num_proc=3)
-
-logging.info(f"Train dataset size: {len(train_dataset)}")
-logging.info(f"Validation dataset size: {len(valid_dataset)}")
-logging.info(
-    f"Sample audio: {train_dataset[0]['audio']['array'][:5]}... (first 5 samples)"
-)
-logging.info(f"Data attributes: {train_dataset.features}")
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-logging.info(f"Using device: {device}")
-
-model_id = "vinai/PhoWhisper-large"
-processor = WhisperProcessor.from_pretrained(model_id, language="vi", task="transcribe")
-
-
-def prepare_dataset(batch):
-    audio = batch["audio"]
-    batch["input_features"] = processor(
-        audio["array"], sampling_rate=audio["sampling_rate"]
-    ).input_features[0]
-    batch["labels"] = processor.tokenizer(batch["text"]).input_ids
-    return batch
-
-
-train_dataset = train_dataset.map(
-    prepare_dataset, remove_columns=train_dataset.column_names
-)
-valid_dataset = valid_dataset.map(
-    prepare_dataset, remove_columns=valid_dataset.column_names
-)
-
-logging.info(f"Processed train dataset: {train_dataset[0]}")
-logging.info(f"Processed validation dataset: {valid_dataset[0]}")
-
-model = WhisperForConditionalGeneration.from_pretrained(
-    model_id,
-    use_cache=False,
-    device_map="auto",
-    quantization_config=BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_compute_dtype=torch.float16,
-        bnb_4bit_use_double_quant=True,
-        bnb_4bit_quant_type="nf4",
-    ),
-)
-model.config.forced_decoder_ids = processor.get_decoder_prompt_ids(
-    language="vi", task="transcribe"
-)
-model.config.suppress_tokens = []
-
-if torch.cuda.device_count() > 1:
-    DEV_MAP = model.hf_device_map.copy()
-    DEV_MAP["model.decoder.embed_tokens"] = DEV_MAP[
-        "model.decoder.embed_positions"
-    ] = DEV_MAP["proj_out"] = model._hf_hook.execution_device
-    accelerate.dispatch_model(model, device_map=DEV_MAP)
-    setattr(model, "model_parallel", True)
-    setattr(model, "is_parallelizable", True)
-
-logging.info(f"Model loaded: {model_id}")
-
-peft_model = peft.get_peft_model(
-    peft.prepare_model_for_kbit_training(
-        model,
-        # use_gradient_checkpointing=True,
-        # gradient_checkpointing_kwargs={"use_reentrant": False},
-    ),
-    peft.LoraConfig(
-        r=32,
-        lora_alpha=64,
-        target_modules=["q_proj", "v_proj"],
-        lora_dropout=0.05,
-        bias="none",
-    ),
-    # peft.AdaLoraConfig(r=8, lora_alpha=16, target_modules=["q_proj", "v_proj"], lora_dropout=.05, bias="none")
-)
-
-peft_model.model.model.encoder.conv1.register_forward_hook(
-    lambda module, input, output: output.requires_grad_(True)
-)  # re-enable grad computation for conv layer
-peft_model.print_trainable_parameters()  # 16 millions = 1% of 1.6 billions params of whisper large
-
-
+# --- 2. Data Collator ---
 @dataclass
 class DataCollatorSpeechSeq2SeqWithPadding:
     processor: Any
@@ -160,8 +66,6 @@ class DataCollatorSpeechSeq2SeqWithPadding:
     def __call__(
         self, features: List[Dict[str, Union[List[int], torch.Tensor]]]
     ) -> Dict[str, torch.Tensor]:
-        # split inputs and labels since they have to be of different lengths and need different padding methods
-        # first treat the audio inputs by simply returning torch tensors
         input_features = [
             {"input_features": feature["input_features"]} for feature in features
         ]
@@ -169,140 +73,219 @@ class DataCollatorSpeechSeq2SeqWithPadding:
             input_features, return_tensors="pt"
         )
 
-        # get the tokenized label sequences
         label_features = [{"input_ids": feature["labels"]} for feature in features]
-        # pad the labels to max length
         labels_batch = self.processor.tokenizer.pad(label_features, return_tensors="pt")
 
-        # replace padding with -100 to ignore loss correctly
         labels = labels_batch["input_ids"].masked_fill(
             labels_batch.attention_mask.ne(1), -100
         )
 
-        # if bos token is appended in previous tokenization step,
-        # cut bos token here as it's append later anyways
         if (labels[:, 0] == self.decoder_start_token_id).all().cpu().item():
             labels = labels[:, 1:]
 
         batch["labels"] = labels
-
         return batch
 
-
-data_collator = DataCollatorSpeechSeq2SeqWithPadding(
-    processor=processor,
-    decoder_start_token_id=model.config.decoder_start_token_id,
-)
-
-metric = evaluate.load("wer")
-
-
-def compute_metrics(pred):
-    pred_ids = pred.predictions
-    label_ids = pred.label_ids
-
-    label_ids[label_ids == -100] = processor.tokenizer.pad_token_id
-    pred_str = processor.tokenizer.batch_decode(pred_ids, skip_special_tokens=True)
-    label_str = processor.tokenizer.batch_decode(label_ids, skip_special_tokens=True)
-
-    wer = 100 * metric.compute(predictions=pred_str, references=label_str)
-
-    return {"wer": wer}
-
-
-class MLflowCallback(TrainerCallback):
-    def on_evaluate(self, args, state, control, metrics, **kwargs):
-        if "eval_wer" in metrics:
-            mlflow.log_metric("eval_wer", metrics["eval_wer"], step=state.global_step)
-
-
-training_args = Seq2SeqTrainingArguments(
-    output_dir="./logs/phowhisper-large-all-vi",
-    per_device_train_batch_size=4,
-    gradient_accumulation_steps=8,
-    learning_rate=1e-5,
-    warmup_steps=400,
-    # max_steps=1000, # testing
-    gradient_checkpointing=True,
-    gradient_checkpointing_kwargs={"use_reentrant": False},
-    fp16=True,
-    optim="adamw_bnb_8bit",
-    eval_strategy="no",
-    per_device_eval_batch_size=4,
-    save_steps=200,
-    # eval_steps=100,
-    num_train_epochs=30,
-    save_total_limit=3,
-    logging_steps=200,
-    # load_best_model_at_end=True,
-    metric_for_best_model="wer",
-    greater_is_better=False,
-    push_to_hub=True,
-    remove_unused_columns=False,
-    hub_model_id="minhtien2405/phowhisper-large-all-vi",
-)
-
-with mlflow.start_run(run_name="phowhisper_finetune_all_vi"):
-    mlflow.log_params(
-        {
-            "model_name": model_id,
-            "per_device_train_batch_size": training_args.per_device_train_batch_size,
-            "gradient_accumulation_steps": training_args.gradient_accumulation_steps,
-            "learning_rate": training_args.learning_rate,
-            "max_steps": training_args.max_steps,
-            "warmup_steps": training_args.warmup_steps,
-            "fp16": training_args.fp16,
-        }
+# --- 3. Helper Functions ---
+def setup_logging(config: TrainingConfig) -> logging.Logger:
+    """Cấu hình logging cho project."""
+    os.makedirs(config.log_dir, exist_ok=True)
+    log_filename = f"phowhisper_training_{datetime.now().strftime('%Y%m%d')}.log"
+    logging.basicConfig(
+        filename=os.path.join(config.log_dir, log_filename),
+        level=logging.INFO,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+        force=True,
     )
+    return logging.getLogger(__name__)
 
-    trainer = Seq2SeqTrainer(
-        model=peft_model,
-        args=training_args,
-        train_dataset=train_dataset,
-        eval_dataset=valid_dataset,
-        data_collator=data_collator,
-        compute_metrics=compute_metrics,
-        callbacks=[MLflowCallback()],
-    )
-
-    trainer.train(resume_from_checkpoint=True)
-    logging.info("Training completed.")
-
+def setup_environment(config: TrainingConfig, logger: logging.Logger):
+    """Thiết lập môi trường, đăng nhập và khởi tạo WandB."""
+    load_dotenv("./configs/.env")
+    
+    # Hugging Face Login
     try:
-        eval_results = trainer.evaluate()
-        # mlflow.log_metric("final_eval_wer", eval_results["eval_wer"])
-        logging.info(
-            f"Final evaluation WER in validation set: {eval_results['eval_wer']}"
-        )
-
-        with open("./logs/phowhisper-large-all-vi/eval_results.json", "w") as f:
-            json.dump(eval_results, f, indent=4)
-        logging.info("Evaluation results saved to eval_results.json.")
-        mlflow.log_artifact(
-            "./logs/phowhisper-large-all-vi/eval_results.json",
-            artifact_path="eval_results",
-        )
-
-    except RuntimeError as e:
-        if "out of memory" in str(e):
-            logging.error("Out of memory error during evaluation. Skipping evaluation.")
-        else:
-            logging.error(f"Runtime error during evaluation: {e}")
+        login(token=os.getenv("HF_TOKEN"))
+        logger.info("Đăng nhập Hugging Face Hub thành công.")
     except Exception as e:
-        logging.error(f"An error occurred during evaluation: {e}")
+        logger.error(f"Lỗi đăng nhập Hugging Face: {e}")
 
-    model_dir = "./models/phowhisper-large-all-vi"
-    trainer.save_model(model_dir)
-    processor.save_pretrained(model_dir)
-    logging.info("Model and processor saved locally.")
+    # WandB Login and Init
+    try:
+        wandb.login(key=os.getenv("WANDB_API_KEY"))
+        wandb.init(project=config.project_name, name=config.run_name, job_type="training")
+        logger.info(f"Đăng nhập và khởi tạo WandB run '{config.run_name}' thành công.")
+    except Exception as e:
+        logger.error(f"Không thể đăng nhập hoặc khởi tạo W&B: {e}")
 
-    trainer.push_to_hub(
-        commit_message="Fine-tuned PhoWhisper large on ViMD All region",
-        tags=["speech-recognition", "vietnamese", "all-vietnam"],
-        dataset="nguyendv02/ViMD_Dataset",
-        language="vi",
-        finetuned_from=model_id,
-        tasks="automatic-speech-recognition",
+    # Cache and CUDA config
+    os.makedirs(config.cache_dir, exist_ok=True)
+    os.environ["HF_DATASETS_CACHE"] = config.cache_dir
+    os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+    torch.cuda.empty_cache()
+    logger.info("Thiết lập môi trường và cache hoàn tất.")
+
+def load_and_prepare_data(config: TrainingConfig, processor: WhisperProcessor, logger: logging.Logger):
+    """Tải, lọc và chuẩn bị dữ liệu cho training."""
+    logger.info(f"Đang tải dataset: {config.dataset_id}")
+    dataset = load_dataset(config.dataset_id, cache_dir=config.cache_dir)
+
+    dataset = dataset.cast_column("audio", Audio(sampling_rate=16000))
+    
+    def filter_long_audio(example):
+        audio_length = example["audio"]["array"].shape[0] / 16000
+        if audio_length > 30:
+            logger.warning(f"Bỏ qua audio dài: {example['audio']['path']} ({audio_length:.2f}s)")
+            return False
+        return True
+
+    train_dataset = dataset["train"].filter(filter_long_audio, num_proc=3)
+    valid_dataset = dataset["valid"].filter(filter_long_audio, num_proc=3)
+    logger.info(f"Kích thước tập train sau khi lọc: {len(train_dataset)}")
+    logger.info(f"Kích thước tập validation sau khi lọc: {len(valid_dataset)}")
+
+    def prepare_dataset(batch):
+        audio = batch["audio"]
+        batch["input_features"] = processor(audio["array"], sampling_rate=16000).input_features[0]
+        batch["labels"] = processor.tokenizer(batch["text"]).input_ids
+        return batch
+
+    train_dataset = train_dataset.map(prepare_dataset, remove_columns=train_dataset.column_names)
+    valid_dataset = valid_dataset.map(prepare_dataset, remove_columns=valid_dataset.column_names)
+    logger.info("Hoàn tất xử lý và chuẩn bị dataset.")
+    return train_dataset, valid_dataset
+
+def setup_model_and_processor(config: TrainingConfig, logger: logging.Logger):
+    """Tải processor và model, áp dụng quantization và PEFT."""
+    logger.info(f"Đang tải processor từ: {config.model_id}")
+    processor = WhisperProcessor.from_pretrained(config.model_id, language="vi", task="transcribe")
+
+    logger.info(f"Đang tải model từ: {config.model_id} với 4-bit quantization.")
+    model = WhisperForConditionalGeneration.from_pretrained(
+        config.model_id,
+        use_cache=False,
+        device_map="auto",
+        quantization_config=BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_compute_dtype=torch.float16,
+            bnb_4bit_use_double_quant=True,
+            bnb_4bit_quant_type="nf4",
+        ),
     )
-    processor.push_to_hub("minhtien2405/phowhisper-large-all-vi")
-    logging.info("Model pushed to Hugging Face Hub.")
+    model.config.forced_decoder_ids = processor.get_decoder_prompt_ids(language="vi", task="transcribe")
+    model.config.suppress_tokens = []
+
+    if torch.cuda.device_count() > 1:
+        logger.info(f"Phân phối model trên {torch.cuda.device_count()} GPUs.")
+        DEV_MAP = model.hf_device_map.copy()
+        DEV_MAP["model.decoder.embed_tokens"] = DEV_MAP["model.decoder.embed_positions"] = DEV_MAP["proj_out"] = model._hf_hook.execution_device
+        accelerate.dispatch_model(model, device_map=DEV_MAP)
+        setattr(model, "model_parallel", True)
+        setattr(model, "is_parallelizable", True)
+
+    logger.info("Áp dụng PEFT/LoRA cho model.")
+    peft_model = peft.get_peft_model(
+        peft.prepare_model_for_kbit_training(model, gradient_checkpointing=config.gradient_checkpointing),
+        peft.LoraConfig(
+            r=32, lora_alpha=64, target_modules=["q_proj", "v_proj"], lora_dropout=0.05, bias="none"
+        ),
+    )
+    peft_model.model.model.encoder.conv1.register_forward_hook(lambda module, input, output: output.requires_grad_(True))
+    peft_model.print_trainable_parameters()
+    
+    return peft_model, processor
+
+# --- 4. Main Execution ---
+def main():
+    config = TrainingConfig()
+    logger = setup_logging(config)
+    
+    try:
+        setup_environment(config, logger)
+        
+        peft_model, processor = setup_model_and_processor(config, logger)
+        train_dataset, valid_dataset = load_and_prepare_data(config, processor, logger)
+
+        data_collator = DataCollatorSpeechSeq2SeqWithPadding(
+            processor=processor,
+            decoder_start_token_id=peft_model.config.decoder_start_token_id,
+        )
+
+        metric = evaluate.load("wer")
+        def compute_metrics(pred):
+            pred_ids = pred.predictions
+            label_ids = pred.label_ids
+            label_ids[label_ids == -100] = processor.tokenizer.pad_token_id
+            pred_str = processor.tokenizer.batch_decode(pred_ids, skip_special_tokens=True)
+            label_str = processor.tokenizer.batch_decode(label_ids, skip_special_tokens=True)
+            wer = 100 * metric.compute(predictions=pred_str, references=label_str)
+            return {"wer": wer}
+
+        training_args = Seq2SeqTrainingArguments(
+            **asdict(config),
+            remove_unused_columns=False,
+            push_to_hub=True,
+            report_to="wandb",
+            gradient_checkpointing_kwargs={"use_reentrant": False} if config.gradient_checkpointing else None,
+        )
+
+        trainer = Seq2SeqTrainer(
+            model=peft_model,
+            args=training_args,
+            train_dataset=train_dataset,
+            eval_dataset=valid_dataset,
+            data_collator=data_collator,
+            compute_metrics=compute_metrics,
+        )
+
+        wandb.config.update(training_args.to_dict())
+        logger.info("Bắt đầu quá trình training...")
+        trainer.train(resume_from_checkpoint=True)
+        logger.info("Quá trình training hoàn tất.")
+
+        logger.info("Bắt đầu đánh giá cuối cùng trên tập validation.")
+        eval_results = trainer.evaluate()
+        logger.info(f"Kết quả WER cuối cùng: {eval_results['eval_wer']}")
+        wandb.log({"final_eval_wer": eval_results["eval_wer"]})
+
+        results_path = os.path.join(config.output_dir, "eval_results.json")
+        with open(results_path, "w") as f:
+            json.dump(eval_results, f, indent=4)
+        logger.info(f"Kết quả đánh giá đã được lưu tại {results_path}")
+
+        logger.info(f"Lưu model và processor vào {config.model_save_dir}")
+        os.makedirs(config.model_save_dir, exist_ok=True)
+        trainer.save_model(config.model_save_dir)
+        processor.save_pretrained(config.model_save_dir)
+
+        logger.info("Lưu model như một artifact trên WandB.")
+        model_artifact = wandb.Artifact(
+            name=f"{config.hub_model_id.split('/')[-1]}-{wandb.run.id}",
+            type="model",
+            description="Fine-tuned PhoWhisper-large model on ViMD All region.",
+            metadata=training_args.to_dict()
+        )
+        model_artifact.add_dir(config.model_save_dir)
+        wandb.log_artifact(model_artifact)
+
+        logger.info(f"Đẩy model lên Hugging Face Hub: {config.hub_model_id}")
+        trainer.push_to_hub(
+            commit_message="Fine-tuned PhoWhisper large on ViMD All region",
+            tag=["phowhisper","vietnamese", "vietnam", "voviai", "vovinam"],
+			defataset=config.dataset_id,
+			language="vi",
+			finetuned_from=config.model_id,
+			tasks="automatic-speech-recognition",
+		)
+        processor.push_to_hub(config.hub_model_id)
+        logger.info("Hoàn tất đẩy model lên Hub.")
+
+    except Exception as e:
+        logger.error(f"Training thất bại: {e}", exc_info=True)
+    finally:
+        wandb.finish()
+        logger.info("WandB run đã kết thúc.")
+
+if __name__ == "__main__":
+    main()
