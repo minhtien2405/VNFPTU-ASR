@@ -299,7 +299,7 @@ def main():
             learning_rate=config.learning_rate,
             warmup_steps=config.warmup_steps,
             num_train_epochs=config.num_train_epochs,
-            evaluation_strategy=config.evaluation_strategy,
+            eval_strategy=config.eval_strategy,
             eval_steps=config.eval_steps,
             save_steps=config.save_steps,
             save_total_limit=config.save_total_limit,
