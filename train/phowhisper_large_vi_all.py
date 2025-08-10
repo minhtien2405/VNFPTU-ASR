@@ -260,7 +260,7 @@ def main():
 
         wandb.config.update(training_args.to_dict())
         logger.info("Bắt đầu quá trình training...")
-        trainer.train(resume_from_checkpoint=True)
+        trainer.train() #resume_from_checkpoint=True)
         logger.info("Quá trình training hoàn tất.")
 
         logger.info("Bắt đầu đánh giá cuối cùng trên tập validation.")
