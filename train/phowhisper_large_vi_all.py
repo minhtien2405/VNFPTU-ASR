@@ -35,19 +35,19 @@ class TrainingConfig:
     model_save_dir: str = "./models/phowhisper-large-all-vi"
     # Training Hyperparameters
     per_device_train_batch_size: int = 4
-    per_device_eval_batch_size: int = 1
+    # per_device_eval_batch_size: int = 1
     gradient_accumulation_steps: int = 8
     learning_rate: float = 1e-5
     warmup_steps: int = 400
     num_train_epochs: int = 30
     # Evaluation and Saving
-    eval_strategy: str = "steps"
-    eval_steps: int = 400
-    save_steps: int = 400
+    eval_strategy: str = "no"
+    # eval_steps: int = 200
+    save_steps: int = 200
     save_total_limit: int = 3
-    logging_steps: int = 200
+    logging_steps: int = 100
     load_best_model_at_end: bool = True
-    metric_for_best_model: str = "wer"
+    # metric_for_best_model: str = "loss"
     greater_is_better: bool = False
     # Technical
     fp16: bool = True
@@ -225,18 +225,18 @@ def main():
         training_args = Seq2SeqTrainingArguments(
             output_dir=config.output_dir,
             per_device_train_batch_size=config.per_device_train_batch_size,
-            per_device_eval_batch_size=config.per_device_eval_batch_size,
+            # per_device_eval_batch_size=config.per_device_eval_batch_size,
             gradient_accumulation_steps=config.gradient_accumulation_steps,
             learning_rate=config.learning_rate,
             warmup_steps=config.warmup_steps,
             num_train_epochs=config.num_train_epochs,
             eval_strategy=config.eval_strategy,
-            eval_steps=config.eval_steps,
+            # eval_steps=config.eval_steps,
             save_steps=config.save_steps,
             save_total_limit=config.save_total_limit,
             logging_steps=config.logging_steps,
-            load_best_model_at_end=config.load_best_model_at_end,
-            metric_for_best_model=config.metric_for_best_model,
+            # load_best_model_at_end=config.load_best_model_at_end,
+            # metric_for_best_model=config.metric_for_best_model,
             greater_is_better=config.greater_is_better,
             fp16=config.fp16,
             optim=config.optim,
