@@ -260,7 +260,7 @@ def main():
 
         wandb.config.update(training_args.to_dict())
         logger.info("Bắt đầu quá trình training...")
-        trainer.train(resume_from_checkpoint=True)
+        # trainer.train(resume_from_checkpoint=True)
         logger.info("Quá trình training hoàn tất.")
 
         # logger.info("Bắt đầu đánh giá cuối cùng trên tập validation.")
@@ -277,13 +277,13 @@ def main():
         os.makedirs(config.model_save_dir, exist_ok=True)
         trainer.save_model(config.model_save_dir)
         processor.save_pretrained(config.model_save_dir)
-
+        from dataclasses import asdict
         logger.info("Lưu model như một artifact trên WandB.")
         model_artifact = wandb.Artifact(
             name=f"{config.hub_model_id.split('/')[-1]}-{wandb.run.id}",
             type="model",
             description="Fine-tuned PhoWhisper-large model on ViMD All region.",
-            metadata=training_args.to_dict()
+            metadata=asdict(config),
         )
         model_artifact.add_dir(config.model_save_dir)
         wandb.log_artifact(model_artifact)
