@@ -291,8 +291,8 @@ def main():
         logger.info(f"Đẩy model lên Hugging Face Hub: {config.hub_model_id}")
         trainer.push_to_hub(
             commit_message="Fine-tuned PhoWhisper large on ViMD All region",
-            tag=["phowhisper","vietnamese", "vietnam", "voviai", "vovinam"],
-			defataset=config.dataset_id,
+            tags=["phowhisper","vietnamese", "vietnam", "voviai", "vovinam"],
+			dataset=config.dataset_id,
 			language="vi",
 			finetuned_from=config.model_id,
 			tasks="automatic-speech-recognition",
