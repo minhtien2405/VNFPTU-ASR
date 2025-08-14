@@ -39,7 +39,7 @@ class TrainingConfig:
     gradient_accumulation_steps: int = 8
     learning_rate: float = 1e-5
     warmup_steps: int = 400
-    num_train_epochs: int = 30
+    num_train_epochs: int = 20
     # Evaluation and Saving
     eval_strategy: str = "no"
     # eval_steps: int = 200
@@ -260,18 +260,18 @@ def main():
 
         wandb.config.update(training_args.to_dict())
         logger.info("Bắt đầu quá trình training...")
-        trainer.train() #resume_from_checkpoint=True)
+        trainer.train(resume_from_checkpoint=True)
         logger.info("Quá trình training hoàn tất.")
 
-        logger.info("Bắt đầu đánh giá cuối cùng trên tập validation.")
-        eval_results = trainer.evaluate()
-        logger.info(f"Kết quả WER cuối cùng: {eval_results['eval_wer']}")
-        wandb.log({"final_eval_wer": eval_results["eval_wer"]})
+        # logger.info("Bắt đầu đánh giá cuối cùng trên tập validation.")
+        # eval_results = trainer.evaluate()
+        # logger.info(f"Kết quả WER cuối cùng: {eval_results['eval_wer']}")
+        # wandb.log({"final_eval_wer": eval_results["eval_wer"]})
 
-        results_path = os.path.join(config.output_dir, "eval_results.json")
-        with open(results_path, "w") as f:
-            json.dump(eval_results, f, indent=4)
-        logger.info(f"Kết quả đánh giá đã được lưu tại {results_path}")
+        # results_path = os.path.join(config.output_dir, "eval_results.json")
+        # with open(results_path, "w") as f:
+        #     json.dump(eval_results, f, indent=4)
+        # logger.info(f"Kết quả đánh giá đã được lưu tại {results_path}")
 
         logger.info(f"Lưu model và processor vào {config.model_save_dir}")
         os.makedirs(config.model_save_dir, exist_ok=True)
