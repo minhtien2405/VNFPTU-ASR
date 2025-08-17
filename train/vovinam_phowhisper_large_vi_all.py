@@ -30,33 +30,33 @@ from transformers import (
 class TrainingConfig:
     # Model and Hub IDs
     model_id: str = "minhtien2405/phowhisper-large-all-vi"
-    hub_model_id: str = "minhtien2405/vovinam-phowhisper-large-vi"
+    hub_model_id: str = "minhtien2405/vovinam-phowhisper-large-vi-all"
     
     # Dataset
     dataset_id: str = "minhtien2405/VoviAIDataset"
     
     # Directories
-    output_dir: str = "./logs/vovinam_phowhisper-large-vi"
+    output_dir: str = "./logs/vovinam_phowhisper-large-vi-all"
     cache_dir: str = "./cache"
     log_dir: str = "./logs"
-    model_save_dir: str = "./models/vovinam_phowhisper-large-vi"
+    model_save_dir: str = "./models/vovinam_phowhisper-large-vi-all"
     
     # Training Hyperparameters
     per_device_train_batch_size: int = 4
-    per_device_eval_batch_size: int = 1
+    # per_device_eval_batch_size: int = 1
     gradient_accumulation_steps: int = 8
     learning_rate: float = 1e-5
-    warmup_steps: int = 100
+    warmup_steps: int = 400
     num_train_epochs: int = 50
     
     # Evaluation and Saving
-    eval_strategy: str = "steps"
-    eval_steps: int = 100
-    save_steps: int = 100
+    eval_strategy: str = "no"
+    # eval_steps: int = 100
+    save_steps: int = 200
     save_total_limit: int = 3
-    logging_steps: int = 25
+    logging_steps: int = 200
     load_best_model_at_end: bool = True
-    metric_for_best_model: str = "wer"
+    # metric_for_best_model: str = "wer"    
     greater_is_better: bool = False
     
     # Technical Configs
@@ -294,18 +294,18 @@ def main():
         training_args = Seq2SeqTrainingArguments(
             output_dir=config.output_dir,
             per_device_train_batch_size=config.per_device_train_batch_size,
-            per_device_eval_batch_size=config.per_device_eval_batch_size,
+            # per_device_eval_batch_size=config.per_device_eval_batch_size,
             gradient_accumulation_steps=config.gradient_accumulation_steps,
             learning_rate=config.learning_rate,
             warmup_steps=config.warmup_steps,
             num_train_epochs=config.num_train_epochs,
             eval_strategy=config.eval_strategy,
-            eval_steps=config.eval_steps,
+            # eval_steps=config.eval_steps,
             save_steps=config.save_steps,
             save_total_limit=config.save_total_limit,
             logging_steps=config.logging_steps,
-            load_best_model_at_end=config.load_best_model_at_end,
-            metric_for_best_model=config.metric_for_best_model,
+            # load_best_model_at_end=config.load_best_model_at_end,
+            # metric_for_best_model=config.metric_for_best_model,
             greater_is_better=config.greater_is_better,
             fp16=config.fp16,
             optim=config.optim,
@@ -317,7 +317,7 @@ def main():
             report_to="wandb",
             gradient_checkpointing_kwargs={"use_reentrant": False} if config.gradient_checkpointing else None,
         )
-
+        
         trainer = Seq2SeqTrainer(
             model=model, args=training_args, train_dataset=train_dataset,
             eval_dataset=valid_dataset, data_collator=data_collator,
@@ -325,13 +325,13 @@ def main():
         )
 
         logger.info("Bắt đầu quá trình training...")
-        trainer.train(resume_from_checkpoint=True)
+        trainer.train() #resume_from_checkpoint=True)
         logger.info("Quá trình training hoàn tất.")
 
-        logger.info("Bắt đầu đánh giá trên tập test...")
-        test_results = trainer.evaluate(eval_dataset=test_dataset)
-        logger.info(f"Kết quả WER trên tập test: {test_results['eval_wer']}")
-        wandb.log({"test_wer": test_results["eval_wer"]})
+        # logger.info("Bắt đầu đánh giá trên tập test...")
+        # test_results = trainer.evaluate(eval_dataset=test_dataset)
+        # logger.info(f"Kết quả WER trên tập test: {test_results['eval_wer']}")
+        # wandb.log({"test_wer": test_results["eval_wer"]})
 
         os.makedirs(config.model_save_dir, exist_ok=True)
         trainer.save_model(config.model_save_dir)
@@ -341,8 +341,8 @@ def main():
         logger.info("Đẩy model lên Hugging Face Hub...")
         trainer.push_to_hub(
 			commit_message="Fine-tuned PhoWhisper-large on VoviAI Dataset",
-            tag=["phowhisper","vietnamese", "vietnam", "voviai", "vovinam"],
-			defataset=config.dataset_id,
+            tags=["phowhisper","vietnamese", "vietnam", "voviai", "vovinam"],
+			dataset=config.dataset_id,
 			language="vi",
 			finetuned_from=config.model_id,
 			tasks="automatic-speech-recognition",
